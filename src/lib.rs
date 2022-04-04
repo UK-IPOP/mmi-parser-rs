@@ -71,45 +71,54 @@ fn parse_positional_info(info: &str) -> String {
     info.to_string()
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Trigger {
-    name: String,
-    loc: Location,
-    loc_position: u8,
-    text: String,
-    part_of_speech: String,
-    negation: bool,
+fn parse_triggers(info: &str) -> String {
+    // placeholder just returns the string
+    info.to_string()
 }
 
-fn parse_triggers(triggers: &str) -> Vec<Trigger> {
-    let trigger_list1 = triggers.replace("[", "");
-    let trigger_list2 = trigger_list1.replace("]", "");
-    let trigger_list3 = trigger_list2.replace("\"", "");
-    let trigger_list4 = trigger_list3.split(",").into_iter();
-    let result = trigger_list4
-        .map(|trigger| {
-            let parts = trigger.split("-").collect::<Vec<&str>>();
-            let name = parts[0];
-            let loc = parts[1];
-            let loc_pos = parts[2].parse::<u8>().unwrap();
-            let text = parts[3];
-            let pos = parts[4];
-            let negation = parts[5] == "1";
-            Trigger {
-                name: name.to_string(),
-                loc: loc.parse().unwrap(),
-                loc_position: loc_pos,
-                text: text.to_string(),
-                part_of_speech: pos.to_string(),
-                negation,
-            }
-        })
-        .collect();
-    return result;
-}
+// #[derive(Debug, PartialEq, Eq)]
+// pub struct Trigger {
+//     name: String,
+//     loc: Location,
+//     loc_position: u8,
+//     text: String,
+//     part_of_speech: String,
+//     negation: bool,
+// }
 
-#[derive(Debug, PartialEq, Eq)]
+// fn parse_triggers(triggers: &str) -> Vec<Trigger> {
+//     let trigger_list1 = triggers.replace('[', "");
+//     let trigger_list2 = trigger_list1.replace(']', "");
+//     // removed the quote substitution
+//     let trigger_list4 = trigger_list2.split(',');
+//     let result = trigger_list4
+//         .map(|trigger| {
+//             let parts: Vec<&str> = trigger.split('-').collect();
+//             println!("{:?}", parts.len());
+//             for part in &parts {
+//                 println!("{:?}\n", part);
+//                 println!("DONE");
+//             }
+//             let name = parts[0].trim();
+//             let loc = parts[1].trim();
+//             let loc_pos = parts[2].parse::<u8>().unwrap();
+//             let text = parts[3].trim();
+//             let pos = parts[4].trim();
+//             let negation = parts[5].trim() == "1";
+//             Trigger {
+//                 name: name.to_string(),
+//                 loc: loc.parse().unwrap(),
+//                 loc_position: loc_pos,
+//                 text: text.to_string(),
+//                 part_of_speech: pos.to_string(),
+//                 negation,
+//             }
+//         })
+//         .collect();
+//     return result;
+// }
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MmiOutput {
     pub id: String,
     pub mmi: String,
@@ -117,7 +126,7 @@ pub struct MmiOutput {
     pub name: String,
     pub cui: String,
     pub semantic_types: Vec<String>,
-    pub triggers: Vec<Trigger>,
+    pub triggers: String,
     pub location: Location,
     pub positional_info: String,
     pub tree_codes: Option<Vec<String>>,
