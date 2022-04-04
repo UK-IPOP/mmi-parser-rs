@@ -1,0 +1,15 @@
+[package]
+name = "mmi-parser"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+colored = "2"
+
+
+[features]
+# this effectively enable the feature `no-color` of colored when testing with
+# `cargo test --feature dumb_terminal`
+dumb_terminal = ["colored/no-color"]
