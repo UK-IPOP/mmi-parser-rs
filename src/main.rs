@@ -1,12 +1,11 @@
 use std::{
     env,
-    fs::{self, File},
-    io::Write,
+    fs::{self},
 };
 
 use colored::*;
-use mmi_parser;
-use serde_json::{self, Map, Value};
+
+use serde_json::{self};
 
 fn main() {
     println!("{}", "MMI Parser".bright_green().bold());
