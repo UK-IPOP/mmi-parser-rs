@@ -2,6 +2,12 @@
 name = "mmi-parser"
 version = "0.1.0"
 edition = "2021"
+authors = ["Nick Anthony"]
+description = "A parser for MetaMap MMI output."
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/UK-IPOP/mmi-parser-rs"
+repository = "https://github.com/UK-IPOP/mmi-parser-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
