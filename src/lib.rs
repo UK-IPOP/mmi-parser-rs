@@ -144,7 +144,7 @@ impl MmiOutput {
         let semantic_types = parse_semantic_types(parts["semantic_types"]);
         let triggers = parse_triggers(parts["triggers"]);
         let location = Location::from_str(parts["location"]).unwrap();
-        let positional_info = parts["positional_info"].to_string();
+        let positional_info = parse_positional_info(parts["positional_info"]);
         let tree_codes = parse_tree_codes(parts["tree_codes"]);
         MmiOutput {
             id,
