@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -31,7 +33,7 @@ fn parse_semantic_types(semantic_types: &str) -> Vec<String> {
     cleaned.split(",").map(|x| x.to_string()).collect()
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Location {
     TI,
     AB,
@@ -163,6 +165,41 @@ pub fn parse_mmi(text: &str) -> MmiOutput {
     let parts = split_text(text);
     let fields = name_parts(parts);
     MmiOutput::new(fields)
+}
+
+pub fn parse_mmi_from_json(mut data: Value) -> Value {
+    data.get_mut("encounter")
+        .expect("encounter not found")
+        .as_object_mut()
+        .expect("could not find encounter as object")
+        .iter_mut()
+        .for_each(|(_, encounter)| {
+            encounter
+                .get_mut("scm-notes")
+                .expect("Could not find scm-notes key")
+                .as_array_mut()
+                .expect("Could not make scm-notes as array")
+                .iter_mut()
+                .for_each(|note| {
+                    let mut results: Vec<Value> = Vec::new();
+                    note.get_mut("metamap_output")
+                        .expect("Could not find metamap_output key")
+                        .as_array_mut()
+                        .expect("Could not make metamap_output as array")
+                        .iter_mut()
+                        .for_each(|mm_output| {
+                            let prepared = mm_output.as_str().expect("Could not make string");
+                            let mmi_output = parse_mmi(prepared);
+                            let serde_mmi_output = serde_json::to_value(&mmi_output)
+                                .expect("Could not serialize mmi_output");
+                            results.push(serde_mmi_output);
+                        });
+                    note.as_object_mut()
+                        .expect("couldn't create note obj")
+                        .insert("mmi_output".to_string(), serde_json::Value::Array(results));
+                })
+        });
+    data
 }
 
 #[cfg(test)]
