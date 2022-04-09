@@ -1,3 +1,5 @@
+extern crate core;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -9,7 +11,7 @@ fn split_text(text: &str) -> Vec<&str> {
     text.split('|').collect()
 }
 
-fn name_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
+fn label_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
     let mut map = HashMap::new();
     map.insert("id", parts[0]);
     map.insert("mmi", parts[1]);
@@ -62,20 +64,35 @@ fn parse_tree_codes(codes: &str) -> Option<Vec<String>> {
     Some(codes.split(';').map(|x| x.to_string()).collect())
 }
 
-#[derive(PartialEq, Eq, Debug)]
-struct Position {
-    start: u8,
-    length: u8,
-}
-
-fn parse_positional_info(info: &str) -> String {
-    // placeholder just returns the string
-    info.to_string()
+// use with parse triggers
+fn split_with_quote_context(x: &str) -> Vec<String> {
+    let mut is_in_quotes = false;
+    let mut start_position = 0;
+    let final_position = x.len();
+    let mut parts: Vec<String> = Vec::new();
+    for (i, c) in x.chars().enumerate() {
+        if c == '\"' {
+            is_in_quotes = !is_in_quotes;
+        } else if c == ',' && !is_in_quotes {
+            parts.push(x[start_position..i].to_string());
+            start_position = i + 1;
+        } else if i == final_position - 1 {
+            // last part
+            parts.push(x[start_position..final_position].to_string());
+        }
+    }
+    parts
 }
 
 fn parse_triggers(info: &str) -> String {
     // placeholder just returns the string
     info.to_string()
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+struct Position {
+    start: u8,
+    length: u8,
 }
 
 // #[derive(Debug, PartialEq, Eq)]
@@ -163,7 +180,7 @@ impl MmiOutput {
 
 pub fn parse_mmi(text: &str) -> MmiOutput {
     let parts = split_text(text);
-    let fields = name_parts(parts);
+    let fields = label_parts(parts);
     MmiOutput::new(fields)
 }
 
@@ -202,9 +219,94 @@ pub fn parse_mmi_from_json(mut data: Value) -> Value {
     data
 }
 
+
+fn parse_positional_info(info: &str) -> String {
+    // placeholder just returns the string
+    info.to_string()
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum PositionalInfoType {
+    A,
+    B,
+    C,
+    D,
+}
+
+//TODO: more thorough tests
+fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
+    // series of different conditions
+    let mut has_semi_colon = false;
+    let mut has_brackets = false;
+    let mut has_comma = false;
+    let mut has_comma_outside_brackets= false;
+    let mut in_bracket = false;
+    for c in x.chars() {
+        // encountered bracket somewhere
+        if c == '[' {
+            has_brackets = true;
+            in_bracket = true;
+        } else if c == ']' {
+            in_bracket = false;
+        } else if c == ';' {
+            has_semi_colon = true;
+        } else if c == ',' && !in_bracket {
+            has_comma_outside_brackets = true;
+        } else if c == ',' {
+            has_comma = true;
+        }
+    }
+    (has_semi_colon, has_brackets, has_comma, has_comma_outside_brackets)
+}
+
+//TODO: more thorough tests
+fn categorize_positional_info(has_semi_colon: bool, has_brackets: bool, has_comma: bool, has_comma_outside_brackets: bool) -> PositionalInfoType {
+    if has_semi_colon {
+        PositionalInfoType::A
+    } else if has_comma && !has_brackets {
+        PositionalInfoType::B
+    } else if has_brackets && has_comma && !has_comma_outside_brackets {
+        PositionalInfoType::C
+    } else if has_comma_outside_brackets && has_brackets {
+        PositionalInfoType::D
+    } else {
+        panic!("Unable to categorize information based on criteria provided.")
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pos_info_categorization() {
+        // ex 1 type C
+        let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(
+            r1.0,
+            r1.1,
+            r1.2,
+            r1.3,
+        );
+
+        assert_eq!(r1, (false, true, true, true));
+        assert_eq!(cat, PositionalInfoType::D);
+    }
+
+    #[test]
+    fn test_categorize_pos_info() {
+        let sample = "[4061/10,4075/11],[4166/10,4180/11]";
+    }
+
+    #[test]
+    fn test_quote_splitter() {
+        let sample = "[\"Drug, NOS\"-tx-33-\"medicine\"-noun-0,\"Drug, NOS\"-tx-31-\"medicine\"-noun-0,\"Drug, NOS\"-tx-29-\"medication\"-noun-0,\"Drug, NOS\"-tx-5-\"drug\"-noun-0]";
+        let r = split_with_quote_context(sample);
+        assert_eq!(r.len(), 4);
+    }
 
     #[test]
     fn test_split_text() {
@@ -218,7 +320,7 @@ mod tests {
     #[test]
     fn test_name_parts() {
         let sample = "24119710|MMI|637.30|Isopoda|C0598806|[euka]|[\"Isopod\"-ab-1-\"isopod\"-adj-0,\"Isopoda\"-ti-1-\"Isopoda\"-noun-0]|TI;AB|228/6;136/7|B01.050.500.131.365.400";
-        assert_eq!(name_parts(split_text(sample)), {
+        assert_eq!(label_parts(split_text(sample)), {
             let mut map = HashMap::new();
             map.insert("id", "24119710");
             map.insert("mmi", "MMI");
