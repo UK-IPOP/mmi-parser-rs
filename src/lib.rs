@@ -95,6 +95,71 @@ struct Position {
     length: u8,
 }
 
+
+fn parse_positional_info(info: &str) -> String {
+    // placeholder just returns the string
+    info.to_string()
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum PositionalInfoType {
+    A,
+    B,
+    C,
+    D,
+}
+
+fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
+    // series of different conditions
+    let mut has_semi_colon = false;
+    let mut has_brackets = false;
+    let mut has_comma_inside_brackets = false;
+    let mut has_comma_outside_brackets = false;
+    let mut in_bracket = false;
+    for c in x.chars() {
+        // encountered bracket somewhere
+        if c == '[' {
+            has_brackets = true;
+            in_bracket = true;
+        } else if c == ']' {
+            in_bracket = false;
+        } else if c == ';' {
+            has_semi_colon = true;
+        } else if c == ',' && !in_bracket {
+            has_comma_outside_brackets = true;
+        } else if c == ',' && in_bracket {
+            has_comma_inside_brackets = true;
+        }
+    }
+    (
+        has_semi_colon,
+        has_brackets,
+        has_comma_inside_brackets,
+        has_comma_outside_brackets,
+    )
+}
+
+fn categorize_positional_info(
+    has_semi_colon: bool,
+    has_brackets: bool,
+    has_comma_inside_brackets: bool,
+    has_comma_outside_brackets: bool,
+) -> PositionalInfoType {
+    if has_semi_colon {
+        PositionalInfoType::A
+    } else if (has_comma_inside_brackets || has_comma_outside_brackets) && !has_brackets {
+        PositionalInfoType::B
+    } else if has_brackets && !has_comma_inside_brackets && has_comma_outside_brackets {
+        PositionalInfoType::C
+    } else if has_comma_outside_brackets && has_brackets && has_comma_inside_brackets {
+        PositionalInfoType::D
+    } else {
+        // singleton case A
+        PositionalInfoType::A
+    }
+}
+
+
 // #[derive(Debug, PartialEq, Eq)]
 // pub struct Trigger {
 //     name: String,
@@ -219,68 +284,6 @@ pub fn parse_mmi_from_json(mut data: Value) -> Value {
     data
 }
 
-fn parse_positional_info(info: &str) -> String {
-    // placeholder just returns the string
-    info.to_string()
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum PositionalInfoType {
-    A,
-    B,
-    C,
-    D,
-}
-
-fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
-    // series of different conditions
-    let mut has_semi_colon = false;
-    let mut has_brackets = false;
-    let mut has_comma_inside_brackets = false;
-    let mut has_comma_outside_brackets = false;
-    let mut in_bracket = false;
-    for c in x.chars() {
-        // encountered bracket somewhere
-        if c == '[' {
-            has_brackets = true;
-            in_bracket = true;
-        } else if c == ']' {
-            in_bracket = false;
-        } else if c == ';' {
-            has_semi_colon = true;
-        } else if c == ',' && !in_bracket {
-            has_comma_outside_brackets = true;
-        } else if c == ',' && in_bracket {
-            has_comma_inside_brackets = true;
-        }
-    }
-    (
-        has_semi_colon,
-        has_brackets,
-        has_comma_inside_brackets,
-        has_comma_outside_brackets,
-    )
-}
-
-fn categorize_positional_info(
-    has_semi_colon: bool,
-    has_brackets: bool,
-    has_comma_inside_brackets: bool,
-    has_comma_outside_brackets: bool,
-) -> PositionalInfoType {
-    if has_semi_colon {
-        PositionalInfoType::A
-    } else if (has_comma_inside_brackets || has_comma_outside_brackets) && !has_brackets {
-        PositionalInfoType::B
-    } else if has_brackets && !has_comma_inside_brackets && has_comma_outside_brackets {
-        PositionalInfoType::C
-    } else if has_comma_outside_brackets && has_brackets && has_comma_inside_brackets {
-        PositionalInfoType::D
-    } else {
-        // singleton case A
-        PositionalInfoType::A
-    }
-}
 
 #[cfg(test)]
 mod tests {
