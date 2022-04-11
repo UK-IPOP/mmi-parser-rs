@@ -36,7 +36,7 @@ fn parse_semantic_types(semantic_types: &str) -> Vec<String> {
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub enum Location {
+enum Location {
     TI,
     AB,
     TX,
@@ -172,9 +172,8 @@ enum PositionalInfoType {
     D,
 }
 
-fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
+fn tag_pos_info(x: &str) -> (bool, bool, bool) {
     // series of different conditions
-    let mut has_semi_colon = false;
     let mut has_brackets = false;
     let mut has_comma_inside_brackets = false;
     let mut has_comma_outside_brackets = false;
@@ -186,8 +185,6 @@ fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
             in_bracket = true;
         } else if c == ']' {
             in_bracket = false;
-        } else if c == ';' {
-            has_semi_colon = true;
         } else if c == ',' && !in_bracket {
             has_comma_outside_brackets = true;
         } else if c == ',' && in_bracket {
@@ -195,7 +192,6 @@ fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
         }
     }
     (
-        has_semi_colon,
         has_brackets,
         has_comma_inside_brackets,
         has_comma_outside_brackets,
@@ -203,12 +199,11 @@ fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
 }
 
 fn categorize_positional_info(
-    has_semi_colon: bool,
     has_brackets: bool,
     has_comma_inside_brackets: bool,
     has_comma_outside_brackets: bool,
 ) -> PositionalInfoType {
-    if has_semi_colon {
+    if !has_comma_outside_brackets && !has_comma_inside_brackets {
         PositionalInfoType::A
     } else if (has_comma_inside_brackets || has_comma_outside_brackets) && !has_brackets {
         PositionalInfoType::B
@@ -222,61 +217,98 @@ fn categorize_positional_info(
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+struct Position {
+    start: i32,
+    length: i32,
+    case: PositionalInfoType,
+}
 
-// #[derive(Debug, PartialEq, Eq)]
-// pub struct Trigger {
-//     name: String,
-//     loc: Location,
-//     loc_position: u8,
-//     text: String,
-//     part_of_speech: String,
-//     negation: bool,
-// }
+impl Position {
+    fn new(start: i32, length: i32, case: PositionalInfoType) -> Position {
+        Position {
+            start,
+            length,
+            case,
+        }
+    }
+}
 
-// fn parse_triggers(triggers: &str) -> Vec<Trigger> {
-//     let trigger_list1 = triggers.replace('[', "");
-//     let trigger_list2 = trigger_list1.replace(']', "");
-//     // removed the quote substitution
-//     let trigger_list4 = trigger_list2.split(',');
-//     let result = trigger_list4
-//         .map(|trigger| {
-//             let parts: Vec<&str> = trigger.split('-').collect();
-//             println!("{:?}", parts.len());
-//             for part in &parts {
-//                 println!("{:?}\n", part);
-//                 println!("DONE");
-//             }
-//             let name = parts[0].trim();
-//             let loc = parts[1].trim();
-//             let loc_pos = parts[2].parse::<u8>().unwrap();
-//             let text = parts[3].trim();
-//             let pos = parts[4].trim();
-//             let negation = parts[5].trim() == "1";
-//             Trigger {
-//                 name: name.to_string(),
-//                 loc: loc.parse().unwrap(),
-//                 loc_position: loc_pos,
-//                 text: text.to_string(),
-//                 part_of_speech: pos.to_string(),
-//                 negation,
-//             }
-//         })
-//         .collect();
-//     return result;
-// }
+fn parse_positional_info(info: &str) -> Vec<Position> {
+    let tags = tag_pos_info(info);
+    let category = categorize_positional_info(tags.0, tags.1, tags.2);
+    match category {
+        PositionalInfoType::A => info
+            .split(';')
+            .map(|x| {
+                let parts = x
+                    .split('/')
+                    .map(|x| {
+                        let y = x
+                            .parse::<i32>()
+                            .expect(x);
+                        y
+                    })
+                    .collect::<Vec<i32>>();
+                Position::new(parts[0], parts[1], PositionalInfoType::A)
+            })
+            .collect(),
+        PositionalInfoType::B => info
+            .split(';')
+            .flat_map(|f| {
+                f.split(',')
+                    .map(|x| {
+                        let parts = x
+                            .split('/')
+                            .map(|x| {
+                                let y = x.parse::<i32>().expect("could not parse integer");
+                                y
+                            })
+                            .collect::<Vec<i32>>();
+                        Position::new(parts[0], parts[1], PositionalInfoType::B)
+                    }).collect::<Vec<Position>>()
+            }).collect::<Vec<Position>>(),
+        PositionalInfoType::C => info
+            .split(';')
+            .flat_map(|f| {
+                f.split(',')
+                    .map(|x| {
+                        let parts = parse_bracketed_info(x);
+                        Position::new(parts[0], parts[1], PositionalInfoType::C)
+                    }).collect::<Vec<Position>>()
+            }).collect::<Vec<Position>>(),
+        PositionalInfoType::D => {
+            info
+                .split(';')
+                .flat_map(|f| {
+                    let split_parts = split_with_bracket_context(info);
+                    split_parts
+                        .iter()
+                        .flat_map(|y| {
+                            y.split(',')
+                                .map(|x| {
+                                    let parts = parse_bracketed_info(x);
+                                    Position::new(parts[0], parts[1], PositionalInfoType::D)
+                                }).collect::<Vec<Position>>()
+                        }).collect::<Vec<Position>>()
+                }).collect()
+        }
+    }
+}
+
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MmiOutput {
-    pub id: String,
-    pub mmi: String,
-    pub score: String,
-    pub name: String,
-    pub cui: String,
-    pub semantic_types: Vec<String>,
-    pub triggers: String,
-    pub location: Location,
-    pub positional_info: String,
-    pub tree_codes: Option<Vec<String>>,
+    id: String,
+    mmi: String,
+    score: String,
+    name: String,
+    cui: String,
+    semantic_types: Vec<String>,
+    triggers: Vec<Trigger>,
+    location: Location,
+    positional_info: Vec<Position>,
+    tree_codes: Option<Vec<String>>,
 }
 
 impl MmiOutput {
@@ -347,10 +379,16 @@ pub fn parse_mmi_from_json(mut data: Value) -> Value {
     data
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_split_with_bracket_context() {
+        let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
+        let r1 = split_with_bracket_context(s1);
+        assert_eq!(r1, vec!["[4061/10,4075/11]", "[4061/10,4075/11]"])
+    }
 
     // this is a lengthy integration test of the
     // `tag_pos_info` and the `categorize_positional_info` functions
@@ -480,7 +518,14 @@ mod tests {
     #[test]
     fn test_parse_positional_info() {
         let sample = "228/6;136/7";
-        assert_eq!(parse_positional_info(sample), String::from("228/6;136/7"));
+        assert_eq!(parse_positional_info(sample), vec![Position::new(228, 6, PositionalInfoType::A), Position::new(136, 7, PositionalInfoType::A)]);
+        let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
+        assert_eq!(parse_positional_info(s1), vec![
+            Position::new(4061, 10, PositionalInfoType::D),
+            Position::new(4075, 11, PositionalInfoType::D),
+            Position::new(4061, 10, PositionalInfoType::D),
+            Position::new(4075, 11, PositionalInfoType::D),
+        ])
     }
 
     #[test]
