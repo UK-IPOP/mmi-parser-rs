@@ -219,7 +219,6 @@ pub fn parse_mmi_from_json(mut data: Value) -> Value {
     data
 }
 
-
 fn parse_positional_info(info: &str) -> String {
     // placeholder just returns the string
     info.to_string()
@@ -233,13 +232,12 @@ enum PositionalInfoType {
     D,
 }
 
-//TODO: more thorough tests
 fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
     // series of different conditions
     let mut has_semi_colon = false;
     let mut has_brackets = false;
-    let mut has_comma = false;
-    let mut has_comma_outside_brackets= false;
+    let mut has_comma_inside_brackets = false;
+    let mut has_comma_outside_brackets = false;
     let mut in_bracket = false;
     for c in x.chars() {
         // encountered bracket somewhere
@@ -252,53 +250,81 @@ fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
             has_semi_colon = true;
         } else if c == ',' && !in_bracket {
             has_comma_outside_brackets = true;
-        } else if c == ',' {
-            has_comma = true;
+        } else if c == ',' && in_bracket {
+            has_comma_inside_brackets = true;
         }
     }
-    (has_semi_colon, has_brackets, has_comma, has_comma_outside_brackets)
+    (
+        has_semi_colon,
+        has_brackets,
+        has_comma_inside_brackets,
+        has_comma_outside_brackets,
+    )
 }
 
-//TODO: more thorough tests
-fn categorize_positional_info(has_semi_colon: bool, has_brackets: bool, has_comma: bool, has_comma_outside_brackets: bool) -> PositionalInfoType {
+fn categorize_positional_info(
+    has_semi_colon: bool,
+    has_brackets: bool,
+    has_comma_inside_brackets: bool,
+    has_comma_outside_brackets: bool,
+) -> PositionalInfoType {
     if has_semi_colon {
         PositionalInfoType::A
-    } else if has_comma && !has_brackets {
+    } else if (has_comma_inside_brackets || has_comma_outside_brackets) && !has_brackets {
         PositionalInfoType::B
-    } else if has_brackets && has_comma && !has_comma_outside_brackets {
+    } else if has_brackets && !has_comma_inside_brackets && has_comma_outside_brackets {
         PositionalInfoType::C
-    } else if has_comma_outside_brackets && has_brackets {
+    } else if has_comma_outside_brackets && has_brackets && has_comma_inside_brackets {
         PositionalInfoType::D
     } else {
-        panic!("Unable to categorize information based on criteria provided.")
+        // singleton case A
+        PositionalInfoType::A
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // this is a lengthy integration test of the
+    // `tag_pos_info` and the `categorize_positional_info` functions
     #[test]
     fn test_pos_info_categorization() {
         // ex 1 type C
         let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
         let r1 = tag_pos_info(s1);
-        let cat = categorize_positional_info(
-            r1.0,
-            r1.1,
-            r1.2,
-            r1.3,
-        );
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
 
         assert_eq!(r1, (false, true, true, true));
         assert_eq!(cat, PositionalInfoType::D);
-    }
 
-    #[test]
-    fn test_categorize_pos_info() {
-        let sample = "[4061/10,4075/11],[4166/10,4180/11]";
+        let s1 = "117/5;122/4";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (true, false, false, false));
+        assert_eq!(cat, PositionalInfoType::A);
+
+        let s1 = "117/5";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (false, false, false, false));
+        assert_eq!(cat, PositionalInfoType::A);
+
+        let s1 = "117/5,122/4,113/2";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (false, false, false, true));
+        assert_eq!(cat, PositionalInfoType::B);
+
+        let s1 = "[122/4],[117/6]";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (false, true, false, true));
+        assert_eq!(cat, PositionalInfoType::C);
     }
 
     #[test]

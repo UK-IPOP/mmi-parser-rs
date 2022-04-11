@@ -11,3 +11,7 @@ Cargo.lock
 
 .vscode/
 .DS_Store
+.idea/.gitignore
+.idea/mmi-parser.iml
+.idea/modules.xml
+.idea/vcs.xml
