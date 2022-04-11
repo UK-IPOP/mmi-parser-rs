@@ -64,8 +64,7 @@ fn parse_tree_codes(codes: &str) -> Option<Vec<String>> {
     Some(codes.split(';').map(|x| x.to_string()).collect())
 }
 
-// use with parse triggers
-fn split_with_quote_context(x: &str) -> Vec<String> {
+fn split_with_quote_context(x: &str, pattern: char) -> Vec<String> {
     let mut is_in_quotes = false;
     let mut start_position = 0;
     let final_position = x.len();
@@ -73,7 +72,7 @@ fn split_with_quote_context(x: &str) -> Vec<String> {
     for (i, c) in x.chars().enumerate() {
         if c == '\"' {
             is_in_quotes = !is_in_quotes;
-        } else if c == ',' && !is_in_quotes {
+        } else if c == pattern && !is_in_quotes {
             parts.push(x[start_position..i].to_string());
             start_position = i + 1;
         } else if i == final_position - 1 {
@@ -84,16 +83,145 @@ fn split_with_quote_context(x: &str) -> Vec<String> {
     parts
 }
 
-fn parse_triggers(info: &str) -> String {
-    // placeholder just returns the string
-    info.to_string()
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+struct Trigger {
+    name: String,
+    loc: Location,
+    loc_position: i32,
+    text: String,
+    part_of_speech: String,
+    negation: bool,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-struct Position {
-    start: u8,
-    length: u8,
+fn parse_bool(x: &str) -> bool {
+    match x {
+        "1" => true,
+        "0" => false,
+        _ => panic!("Unexpected boolean: {}", x),
+    }
 }
+
+impl Trigger {
+    fn new(n: &str, loc: &str, loc_pos: &str, t: &str, part_of_speech: &str, negation: &str) -> Trigger {
+        Trigger {
+            name: n.to_string(),
+            loc: Location::from_str(loc).expect("unable to parse Location"),
+            loc_position: loc_pos.parse::<i32>().expect("unable to parse integer from location"),
+            text: t.to_string(),
+            part_of_speech: part_of_speech.to_string(),
+            negation: parse_bool(negation),
+        }
+    }
+}
+
+
+fn parse_triggers(info: &str) -> Vec<Trigger> {
+    let trigger_list = split_with_quote_context(info, ',');
+    trigger_list
+        .iter()
+        .map(|t| {
+            let clean = t
+                .trim_start_matches('[')
+                .trim_end_matches(']');
+            let parts = split_with_quote_context(clean, '-');
+            Trigger::new(&parts[0], &parts[1], &parts[2], &parts[3], &parts[4], &parts[5])
+        }).collect()
+}
+
+fn split_with_bracket_context(x: &str) -> Vec<String> {
+    let mut is_in_brackets = false;
+    let mut start_position = 0;
+    let final_position = x.len();
+    let mut parts: Vec<String> = Vec::new();
+    for (i, c) in x.chars().enumerate() {
+        if c == '[' {
+            is_in_brackets = !is_in_brackets;
+        } else if c == ']' {
+            is_in_brackets = !is_in_brackets;
+            if i == final_position - 1 {
+                // last part
+                parts.push(x[start_position..final_position].to_string());
+            }
+        } else if c == ',' && !is_in_brackets {
+            parts.push(x[start_position..i].to_string());
+            start_position = i + 1;
+        }
+    }
+    parts
+}
+
+
+fn parse_bracketed_info(x: &str) -> Vec<i32> {
+    let parts = x
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split('/')
+        .map(|x| {
+            let y = x.parse::<i32>().expect("could not parse integer");
+            y
+        })
+        .collect::<Vec<i32>>();
+    parts
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum PositionalInfoType {
+    A,
+    B,
+    C,
+    D,
+}
+
+fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
+    // series of different conditions
+    let mut has_semi_colon = false;
+    let mut has_brackets = false;
+    let mut has_comma_inside_brackets = false;
+    let mut has_comma_outside_brackets = false;
+    let mut in_bracket = false;
+    for c in x.chars() {
+        // encountered bracket somewhere
+        if c == '[' {
+            has_brackets = true;
+            in_bracket = true;
+        } else if c == ']' {
+            in_bracket = false;
+        } else if c == ';' {
+            has_semi_colon = true;
+        } else if c == ',' && !in_bracket {
+            has_comma_outside_brackets = true;
+        } else if c == ',' && in_bracket {
+            has_comma_inside_brackets = true;
+        }
+    }
+    (
+        has_semi_colon,
+        has_brackets,
+        has_comma_inside_brackets,
+        has_comma_outside_brackets,
+    )
+}
+
+fn categorize_positional_info(
+    has_semi_colon: bool,
+    has_brackets: bool,
+    has_comma_inside_brackets: bool,
+    has_comma_outside_brackets: bool,
+) -> PositionalInfoType {
+    if has_semi_colon {
+        PositionalInfoType::A
+    } else if (has_comma_inside_brackets || has_comma_outside_brackets) && !has_brackets {
+        PositionalInfoType::B
+    } else if has_brackets && !has_comma_inside_brackets && has_comma_outside_brackets {
+        PositionalInfoType::C
+    } else if has_comma_outside_brackets && has_brackets && has_comma_inside_brackets {
+        PositionalInfoType::D
+    } else {
+        // singleton case A
+        PositionalInfoType::A
+    }
+}
+
 
 // #[derive(Debug, PartialEq, Eq)]
 // pub struct Trigger {
@@ -220,85 +348,49 @@ pub fn parse_mmi_from_json(mut data: Value) -> Value {
 }
 
 
-fn parse_positional_info(info: &str) -> String {
-    // placeholder just returns the string
-    info.to_string()
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum PositionalInfoType {
-    A,
-    B,
-    C,
-    D,
-}
-
-//TODO: more thorough tests
-fn tag_pos_info(x: &str) -> (bool, bool, bool, bool) {
-    // series of different conditions
-    let mut has_semi_colon = false;
-    let mut has_brackets = false;
-    let mut has_comma = false;
-    let mut has_comma_outside_brackets= false;
-    let mut in_bracket = false;
-    for c in x.chars() {
-        // encountered bracket somewhere
-        if c == '[' {
-            has_brackets = true;
-            in_bracket = true;
-        } else if c == ']' {
-            in_bracket = false;
-        } else if c == ';' {
-            has_semi_colon = true;
-        } else if c == ',' && !in_bracket {
-            has_comma_outside_brackets = true;
-        } else if c == ',' {
-            has_comma = true;
-        }
-    }
-    (has_semi_colon, has_brackets, has_comma, has_comma_outside_brackets)
-}
-
-//TODO: more thorough tests
-fn categorize_positional_info(has_semi_colon: bool, has_brackets: bool, has_comma: bool, has_comma_outside_brackets: bool) -> PositionalInfoType {
-    if has_semi_colon {
-        PositionalInfoType::A
-    } else if has_comma && !has_brackets {
-        PositionalInfoType::B
-    } else if has_brackets && has_comma && !has_comma_outside_brackets {
-        PositionalInfoType::C
-    } else if has_comma_outside_brackets && has_brackets {
-        PositionalInfoType::D
-    } else {
-        panic!("Unable to categorize information based on criteria provided.")
-    }
-}
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // this is a lengthy integration test of the
+    // `tag_pos_info` and the `categorize_positional_info` functions
     #[test]
     fn test_pos_info_categorization() {
         // ex 1 type C
         let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
         let r1 = tag_pos_info(s1);
-        let cat = categorize_positional_info(
-            r1.0,
-            r1.1,
-            r1.2,
-            r1.3,
-        );
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
 
         assert_eq!(r1, (false, true, true, true));
         assert_eq!(cat, PositionalInfoType::D);
-    }
 
-    #[test]
-    fn test_categorize_pos_info() {
-        let sample = "[4061/10,4075/11],[4166/10,4180/11]";
+        let s1 = "117/5;122/4";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (true, false, false, false));
+        assert_eq!(cat, PositionalInfoType::A);
+
+        let s1 = "117/5";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (false, false, false, false));
+        assert_eq!(cat, PositionalInfoType::A);
+
+        let s1 = "117/5,122/4,113/2";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (false, false, false, true));
+        assert_eq!(cat, PositionalInfoType::B);
+
+        let s1 = "[122/4],[117/6]";
+        let r1 = tag_pos_info(s1);
+        let cat = categorize_positional_info(r1.0, r1.1, r1.2, r1.3);
+
+        assert_eq!(r1, (false, true, false, true));
+        assert_eq!(cat, PositionalInfoType::C);
     }
 
     #[test]
