@@ -64,8 +64,7 @@ fn parse_tree_codes(codes: &str) -> Option<Vec<String>> {
     Some(codes.split(';').map(|x| x.to_string()).collect())
 }
 
-// use with parse triggers
-fn split_with_quote_context(x: &str) -> Vec<String> {
+fn split_with_quote_context(x: &str, pattern: char) -> Vec<String> {
     let mut is_in_quotes = false;
     let mut start_position = 0;
     let final_position = x.len();
@@ -73,7 +72,7 @@ fn split_with_quote_context(x: &str) -> Vec<String> {
     for (i, c) in x.chars().enumerate() {
         if c == '\"' {
             is_in_quotes = !is_in_quotes;
-        } else if c == ',' && !is_in_quotes {
+        } else if c == pattern && !is_in_quotes {
             parts.push(x[start_position..i].to_string());
             start_position = i + 1;
         } else if i == final_position - 1 {
@@ -84,21 +83,85 @@ fn split_with_quote_context(x: &str) -> Vec<String> {
     parts
 }
 
-fn parse_triggers(info: &str) -> String {
-    // placeholder just returns the string
-    info.to_string()
-}
-
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-struct Position {
-    start: u8,
-    length: u8,
+struct Trigger {
+    name: String,
+    loc: Location,
+    loc_position: i32,
+    text: String,
+    part_of_speech: String,
+    negation: bool,
+}
+
+fn parse_bool(x: &str) -> bool {
+    match x {
+        "1" => true,
+        "0" => false,
+        _ => panic!("Unexpected boolean: {}", x),
+    }
+}
+
+impl Trigger {
+    fn new(n: &str, loc: &str, loc_pos: &str, t: &str, part_of_speech: &str, negation: &str) -> Trigger {
+        Trigger {
+            name: n.to_string(),
+            loc: Location::from_str(loc).expect("unable to parse Location"),
+            loc_position: loc_pos.parse::<i32>().expect("unable to parse integer from location"),
+            text: t.to_string(),
+            part_of_speech: part_of_speech.to_string(),
+            negation: parse_bool(negation),
+        }
+    }
 }
 
 
-fn parse_positional_info(info: &str) -> String {
-    // placeholder just returns the string
-    info.to_string()
+fn parse_triggers(info: &str) -> Vec<Trigger> {
+    let trigger_list = split_with_quote_context(info, ',');
+    trigger_list
+        .iter()
+        .map(|t| {
+            let clean = t
+                .trim_start_matches('[')
+                .trim_end_matches(']');
+            let parts = split_with_quote_context(clean, '-');
+            Trigger::new(&parts[0], &parts[1], &parts[2], &parts[3], &parts[4], &parts[5])
+        }).collect()
+}
+
+fn split_with_bracket_context(x: &str) -> Vec<String> {
+    let mut is_in_brackets = false;
+    let mut start_position = 0;
+    let final_position = x.len();
+    let mut parts: Vec<String> = Vec::new();
+    for (i, c) in x.chars().enumerate() {
+        if c == '[' {
+            is_in_brackets = !is_in_brackets;
+        } else if c == ']' {
+            is_in_brackets = !is_in_brackets;
+            if i == final_position - 1 {
+                // last part
+                parts.push(x[start_position..final_position].to_string());
+            }
+        } else if c == ',' && !is_in_brackets {
+            parts.push(x[start_position..i].to_string());
+            start_position = i + 1;
+        }
+    }
+    parts
+}
+
+
+fn parse_bracketed_info(x: &str) -> Vec<i32> {
+    let parts = x
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split('/')
+        .map(|x| {
+            let y = x.parse::<i32>().expect("could not parse integer");
+            y
+        })
+        .collect::<Vec<i32>>();
+    parts
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
