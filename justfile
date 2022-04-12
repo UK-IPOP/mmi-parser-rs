@@ -6,7 +6,9 @@
     cargo clippy
     
 @run:
-    cargo run data
+    # remove old files
+    find data -type f -name "*.jsonl" -or -name "*.json" -not -name "sample.json" | xargs rm
+    cargo run -- data
 
 @build: check
     cargo build 
