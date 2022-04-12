@@ -1,7 +1,5 @@
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, LineWriter, Write};
-use std::path::Path;
-use std::str::FromStr;
+use std::io::{BufRead, BufReader, LineWriter, Write};
 
 use colored::*;
 
@@ -32,14 +30,14 @@ fn main() {
                 let path = file.path();
                 let filename = path.to_str().expect("could not parse file path");
                 if filename.ends_with(&cli.input_type) {
-                    println!("Reading file: {}", filename);
+                    println!("Reading file: {}", filename.cyan());
                     match cli.input_type.to_uppercase().as_str() {
                         "TXT" => {
                             let out_file_name =
                                 filename.replace(".txt", "_parsed.jsonl").to_string();
-                            let outfile = fs::File::create(&out_file_name)
+                            let out_file = fs::File::create(&out_file_name)
                                 .expect("could not create output file");
-                            let mut out_writer = LineWriter::new(outfile);
+                            let mut out_writer = LineWriter::new(out_file);
                             // utilize read lines buffer
                             let file = File::open(&path).expect("could not open file");
                             let reader = BufReader::new(file);
@@ -73,16 +71,6 @@ fn main() {
         }
         Err(e) => println!("Error: {}", e.to_string()),
     }
-}
-
-// The output is wrapped in a Result to allow matching on errors
-// Returns an Iterator to the Reader of the lines of the file.
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = fs::File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
 }
 
 fn parse_mmi_from_json(mut data: Value) -> Value {

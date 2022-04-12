@@ -1,11 +1,6 @@
-extern crate core;
-
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
-
-// let sample_text = "24119710|MMI|637.30|Isopoda|C0598806|[euka]|[\"Isopod\"-ab-1-\"isopod\"-adj-0,\"Isopoda\"-ti-1-\"Isopoda\"-noun-0]|TI;AB|228/6;136/7|B01.050.500.131.365.400";
 
 fn split_text(text: &str) -> Vec<&str> {
     text.split('|').collect()
@@ -40,7 +35,7 @@ enum Location {
     TI,
     AB,
     TX,
-    TIAB,
+    Tiab,
 }
 
 impl FromStr for Location {
@@ -51,7 +46,7 @@ impl FromStr for Location {
             "TI" => Ok(Location::TI),
             "AB" => Ok(Location::AB),
             "TX" => Ok(Location::TX),
-            "TI;AB" => Ok(Location::TIAB),
+            "TI;AB" => Ok(Location::Tiab),
             _ => Err(()),
         }
     }
@@ -164,10 +159,8 @@ fn parse_bracketed_info(x: &str) -> Vec<i32> {
         .trim_start_matches('[')
         .trim_end_matches(']')
         .split('/')
-        .map(|x| {
-            let y = x.parse::<i32>().expect("could not parse integer");
-            y
-        })
+        .map(|x| x.parse::<i32>().expect("could not parse integer"))
+        .into_iter()
         .collect::<Vec<i32>>();
     parts
 }
@@ -251,10 +244,7 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
             .map(|x| {
                 let parts = x
                     .split('/')
-                    .map(|x| {
-                        let y = x.parse::<i32>().expect(x);
-                        y
-                    })
+                    .map(|x| x.parse::<i32>().expect(x))
                     .collect::<Vec<i32>>();
                 Position::new(parts[0], parts[1], PositionalInfoType::A)
             })
@@ -266,10 +256,7 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
                     .map(|x| {
                         let parts = x
                             .split('/')
-                            .map(|x| {
-                                let y = x.parse::<i32>().expect("could not parse integer");
-                                y
-                            })
+                            .map(|x| x.parse::<i32>().expect("could not parse integer"))
                             .collect::<Vec<i32>>();
                         Position::new(parts[0], parts[1], PositionalInfoType::B)
                     })
@@ -290,7 +277,7 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
         PositionalInfoType::D => info
             .split(';')
             .flat_map(|f| {
-                let split_parts = split_with_bracket_context(info);
+                let split_parts = split_with_bracket_context(f);
                 split_parts
                     .iter()
                     .flat_map(|y| {
@@ -462,13 +449,13 @@ mod tests {
         let sample = "TX";
         assert_eq!(Location::from_str(sample).unwrap(), Location::TX);
         let sample = "TI;AB";
-        assert_eq!(Location::from_str(sample).unwrap(), Location::TIAB);
+        assert_eq!(Location::from_str(sample).unwrap(), Location::Tiab);
     }
     #[test]
     #[should_panic]
     fn test_invalid_location() {
         let sample = "BG";
-        assert_eq!(Location::from_str(sample).unwrap(), Location::TIAB);
+        assert_eq!(Location::from_str(sample).unwrap(), Location::Tiab);
     }
 
     #[test]
