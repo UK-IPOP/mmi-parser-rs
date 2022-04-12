@@ -102,11 +102,20 @@ fn parse_bool(x: &str) -> bool {
 }
 
 impl Trigger {
-    fn new(n: &str, loc: &str, loc_pos: &str, t: &str, part_of_speech: &str, negation: &str) -> Trigger {
+    fn new(
+        n: &str,
+        loc: &str,
+        loc_pos: &str,
+        t: &str,
+        part_of_speech: &str,
+        negation: &str,
+    ) -> Trigger {
         Trigger {
             name: n.to_string(),
             loc: Location::from_str(loc).expect("unable to parse Location"),
-            loc_position: loc_pos.parse::<i32>().expect("unable to parse integer from location"),
+            loc_position: loc_pos
+                .parse::<i32>()
+                .expect("unable to parse integer from location"),
             text: t.to_string(),
             part_of_speech: part_of_speech.to_string(),
             negation: parse_bool(negation),
@@ -114,18 +123,18 @@ impl Trigger {
     }
 }
 
-
 fn parse_triggers(info: &str) -> Vec<Trigger> {
     let trigger_list = split_with_quote_context(info, ',');
     trigger_list
         .iter()
         .map(|t| {
-            let clean = t
-                .trim_start_matches('[')
-                .trim_end_matches(']');
+            let clean = t.trim_start_matches('[').trim_end_matches(']');
             let parts = split_with_quote_context(clean, '-');
-            Trigger::new(&parts[0], &parts[1], &parts[2], &parts[3], &parts[4], &parts[5])
-        }).collect()
+            Trigger::new(
+                &parts[0], &parts[1], &parts[2], &parts[3], &parts[4], &parts[5],
+            )
+        })
+        .collect()
 }
 
 fn split_with_bracket_context(x: &str) -> Vec<String> {
@@ -149,7 +158,6 @@ fn split_with_bracket_context(x: &str) -> Vec<String> {
     }
     parts
 }
-
 
 fn parse_bracketed_info(x: &str) -> Vec<i32> {
     let parts = x
@@ -244,9 +252,7 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
                 let parts = x
                     .split('/')
                     .map(|x| {
-                        let y = x
-                            .parse::<i32>()
-                            .expect(x);
+                        let y = x.parse::<i32>().expect(x);
                         y
                     })
                     .collect::<Vec<i32>>();
@@ -266,8 +272,10 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
                             })
                             .collect::<Vec<i32>>();
                         Position::new(parts[0], parts[1], PositionalInfoType::B)
-                    }).collect::<Vec<Position>>()
-            }).collect::<Vec<Position>>(),
+                    })
+                    .collect::<Vec<Position>>()
+            })
+            .collect::<Vec<Position>>(),
         PositionalInfoType::C => info
             .split(';')
             .flat_map(|f| {
@@ -275,27 +283,29 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
                     .map(|x| {
                         let parts = parse_bracketed_info(x);
                         Position::new(parts[0], parts[1], PositionalInfoType::C)
-                    }).collect::<Vec<Position>>()
-            }).collect::<Vec<Position>>(),
-        PositionalInfoType::D => {
-            info
-                .split(';')
-                .flat_map(|f| {
-                    let split_parts = split_with_bracket_context(info);
-                    split_parts
-                        .iter()
-                        .flat_map(|y| {
-                            y.split(',')
-                                .map(|x| {
-                                    let parts = parse_bracketed_info(x);
-                                    Position::new(parts[0], parts[1], PositionalInfoType::D)
-                                }).collect::<Vec<Position>>()
-                        }).collect::<Vec<Position>>()
-                }).collect()
-        }
+                    })
+                    .collect::<Vec<Position>>()
+            })
+            .collect::<Vec<Position>>(),
+        PositionalInfoType::D => info
+            .split(';')
+            .flat_map(|f| {
+                let split_parts = split_with_bracket_context(info);
+                split_parts
+                    .iter()
+                    .flat_map(|y| {
+                        y.split(',')
+                            .map(|x| {
+                                let parts = parse_bracketed_info(x);
+                                Position::new(parts[0], parts[1], PositionalInfoType::D)
+                            })
+                            .collect::<Vec<Position>>()
+                    })
+                    .collect::<Vec<Position>>()
+            })
+            .collect(),
     }
 }
-
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MmiOutput {
@@ -342,41 +352,6 @@ pub fn parse_mmi(text: &str) -> MmiOutput {
     let parts = split_text(text);
     let fields = label_parts(parts);
     MmiOutput::new(fields)
-}
-
-pub fn parse_mmi_from_json(mut data: Value) -> Value {
-    data.get_mut("encounter")
-        .expect("encounter not found")
-        .as_object_mut()
-        .expect("could not find encounter as object")
-        .iter_mut()
-        .for_each(|(_, encounter)| {
-            encounter
-                .get_mut("scm-notes")
-                .expect("Could not find scm-notes key")
-                .as_array_mut()
-                .expect("Could not make scm-notes as array")
-                .iter_mut()
-                .for_each(|note| {
-                    let mut results: Vec<Value> = Vec::new();
-                    note.get_mut("metamap_output")
-                        .expect("Could not find metamap_output key")
-                        .as_array_mut()
-                        .expect("Could not make metamap_output as array")
-                        .iter_mut()
-                        .for_each(|mm_output| {
-                            let prepared = mm_output.as_str().expect("Could not make string");
-                            let mmi_output = parse_mmi(prepared);
-                            let serde_mmi_output = serde_json::to_value(&mmi_output)
-                                .expect("Could not serialize mmi_output");
-                            results.push(serde_mmi_output);
-                        });
-                    note.as_object_mut()
-                        .expect("couldn't create note obj")
-                        .insert("mmi_output".to_string(), serde_json::Value::Array(results));
-                })
-        });
-    data
 }
 
 #[cfg(test)]
@@ -518,14 +493,23 @@ mod tests {
     #[test]
     fn test_parse_positional_info() {
         let sample = "228/6;136/7";
-        assert_eq!(parse_positional_info(sample), vec![Position::new(228, 6, PositionalInfoType::A), Position::new(136, 7, PositionalInfoType::A)]);
+        assert_eq!(
+            parse_positional_info(sample),
+            vec![
+                Position::new(228, 6, PositionalInfoType::A),
+                Position::new(136, 7, PositionalInfoType::A)
+            ]
+        );
         let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
-        assert_eq!(parse_positional_info(s1), vec![
-            Position::new(4061, 10, PositionalInfoType::D),
-            Position::new(4075, 11, PositionalInfoType::D),
-            Position::new(4061, 10, PositionalInfoType::D),
-            Position::new(4075, 11, PositionalInfoType::D),
-        ])
+        assert_eq!(
+            parse_positional_info(s1),
+            vec![
+                Position::new(4061, 10, PositionalInfoType::D),
+                Position::new(4075, 11, PositionalInfoType::D),
+                Position::new(4061, 10, PositionalInfoType::D),
+                Position::new(4075, 11, PositionalInfoType::D),
+            ]
+        )
     }
 
     #[test]
