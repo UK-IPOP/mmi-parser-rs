@@ -42,6 +42,6 @@ fn main() {
                 }
             }
         }
-        Err(e) => println!("Error: {}", e.to_string()),
+        Err(e) => println!("Error: {}", e),
     }
 }

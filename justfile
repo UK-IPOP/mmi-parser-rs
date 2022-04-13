@@ -5,7 +5,7 @@
     cargo clean
 
 @check:
-    cargo clippy
+    cargo clippy -- -D warnings --no-deps
     
 @run:
     # remove old files
@@ -38,4 +38,4 @@
     set RUSTFLAGS ""
 
 @doc: clean check
-    cargo doc
+    cargo doc --no-deps --open

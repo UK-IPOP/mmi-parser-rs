@@ -141,13 +141,13 @@ impl Trigger {
         negation: &str,
     ) -> Trigger {
         Trigger {
-            name: n.replace("\"", ""),
+            name: n.replace('\"', ""),
             loc: Location::from_str(loc).expect("unable to parse Location"),
             loc_position: loc_pos
                 .parse::<i32>()
                 .expect("unable to parse integer from location"),
-            text: t.replace("\"", ""),
-            part_of_speech: part_of_speech.replace("\"", ""),
+            text: t.replace('\"', ""),
+            part_of_speech: part_of_speech.replace('\"', ""),
             negation: parse_bool(negation),
         }
     }
