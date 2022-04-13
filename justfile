@@ -36,3 +36,6 @@
 
     # deactivate flags
     set RUSTFLAGS ""
+
+@doc: clean check
+    cargo doc
