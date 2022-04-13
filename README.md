@@ -63,7 +63,7 @@ There is also an API available on crates.io [here](https://crates.io/crates/mmi-
 The API can be installed to your local Rust project by simply adding the crate to your `Cargo.toml`:
 
 ```toml
-mmi-parser = "1.0.0"
+mmi-parser = "1.1.0"
 ```
 
 ## Usage
