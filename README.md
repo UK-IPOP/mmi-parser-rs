@@ -58,7 +58,7 @@ cargo install mmi-parser
 
 If you also need MetaMap installed you can find instructions on how to do so [here](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/documentation/Installation.html).
 
-There is also a _very_ limited public API available on crates.io [here](https://crates.io/crates/mmi-parser). The small scope of this API is just to reduce maintenance burden as the primary goal of this project was an executable parser.
+There is also an API available on crates.io [here](https://crates.io/crates/mmi-parser). The scope of this API is limited to reduce maintenance burden as the primary goal of this project was an executable parser.
 
 The API can be installed to your local Rust project by simply adding the crate to your `Cargo.toml`:
 
@@ -80,7 +80,7 @@ echo lung cancer | metamap -N > metamap_results.txt
 
 The `-N` flag here is important as it signals ot MetaMap to use the MMI output.
 
-This shoul result in an output similar to the following:
+This should result in an output similar to the following:
 
 ```bash
    1   │ /home/nanthony/public_mm/bin/SKRrun.20 /home/nanthony/public_mm/bin/metamap20.BINARY.Linux --lexicon db -Z 2020AA
