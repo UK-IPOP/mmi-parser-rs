@@ -400,18 +400,18 @@ impl MmiOutput {
 ///
 /// This effectively converts *each* fielded MMI **line** into an [`MmiOutput`] type.
 /// For example:
+///
 /// ```rust
-/// use mmi_parser;
 /// use std::fs::File;
 /// use std::io::{self, prelude::*, BufReader};
 
 /// fn main() -> io::Result<()> {
-///     let file = File::open("metamap_output.txt")?;
+///     let file = File::open("data/sample.txt")?;
 ///     let reader = BufReader::new(file);
 
 ///     for line in reader.lines() {
-///         let record = line?.as_str();
-///         let result = parse_mmi(record);
+///         let record = line?;
+///         let result = mmi_parser::parse_mmi(record.as_str());
 ///         println!("{:?}", result); // must use debug
 ///     }
 
