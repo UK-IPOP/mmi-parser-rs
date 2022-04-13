@@ -3,13 +3,13 @@ name = "mmi-parser"
 version = "0.1.2"
 edition = "2021"
 authors = ["Nick Anthony"]
-description = "A parser for MetaMap MMI output."
+description = "A parser for Fielded MetaMap (MMI) output."
 license = "MIT"
-readme = "README.md"
-homepage = "https://github.com/UK-IPOP/mmi-parser-rs"
 repository = "https://github.com/UK-IPOP/mmi-parser-rs"
+keywords = ["cli", "metamap", "mmi", "parser"]
+categories = ["command-line interface", "parsing tools"]
+readme = "README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 colored = "2"
