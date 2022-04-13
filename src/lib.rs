@@ -1,13 +1,30 @@
+//! This module exists to support the primary functions of the
+//! MMI parser.
+//!
+//! The public API is thus very limited.
+//!
+//! The primary reference for the field information is found
+//! [here](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf)
+//! and relies on MetaMap 2016.
+//!
+//! The *only* public functionality is: [`MmiOutput`] and [`parse_mmi`].
+//! All functionality is documented for assistance if errors were to occur, but if
+//! using this crate as a library you will only have access to the above items.
+
 extern crate core;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 
+/// Splits the provided string reference on vertical bar (pipe symbol)
+/// and collects split into vector.
 fn split_text(text: &str) -> Vec<&str> {
     text.split('|').collect()
 }
 
+/// Labels the parts of the pipe-split string using MMI field labels.
+/// Returns a hashmap of field names as keys and their values from the vector.
 fn label_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
     let mut map = HashMap::new();
     map.insert("id", parts[0]);
@@ -23,6 +40,7 @@ fn label_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
     map
 }
 
+/// Parses out semantic type field by removing brackets and splitting on commas.
 fn parse_semantic_types(semantic_types: &str) -> Vec<String> {
     let cleaned = semantic_types
         .strip_prefix('[')
@@ -32,6 +50,7 @@ fn parse_semantic_types(semantic_types: &str) -> Vec<String> {
     cleaned.split(',').map(|x| x.to_string()).collect()
 }
 
+/// Enumeration for Location options.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 enum Location {
     TI,
@@ -42,7 +61,7 @@ enum Location {
 
 impl FromStr for Location {
     type Err = ();
-
+    /// Parses a Location type from a string reference.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
             "TI" => Ok(Location::TI),
@@ -54,6 +73,9 @@ impl FromStr for Location {
     }
 }
 
+/// Parses the tree codes by splitting string reference on semicolon and
+/// collecting into vector.
+/// Returns Optional Vector because tree-codes could be None.
 fn parse_tree_codes(codes: &str) -> Option<Vec<String>> {
     if codes.is_empty() {
         return None;
@@ -61,6 +83,11 @@ fn parse_tree_codes(codes: &str) -> Option<Vec<String>> {
     Some(codes.split(';').map(|x| x.to_string()).collect())
 }
 
+/// Utility function for splitting a string reference on a given pattern
+/// while *ignoring* inside quotes.
+///  
+/// This was necessary due to MMI output containing literal-quoted strings with
+/// split characters ("," or "-") inside them.
 fn split_with_quote_context(x: &str, pattern: char) -> Vec<String> {
     let mut is_in_quotes = false;
     let mut start_position = 0;
@@ -80,6 +107,7 @@ fn split_with_quote_context(x: &str, pattern: char) -> Vec<String> {
     parts
 }
 
+/// Struct to represent Trigger information.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 struct Trigger {
     name: String,
@@ -90,6 +118,10 @@ struct Trigger {
     negation: bool,
 }
 
+/// Utility function to convert string reference to boolean.
+///
+/// Will panic if string reference is not "1" or "0" because
+/// that is the expected output from MetaMap.
 fn parse_bool(x: &str) -> bool {
     match x {
         "1" => true,
@@ -99,6 +131,7 @@ fn parse_bool(x: &str) -> bool {
 }
 
 impl Trigger {
+    /// New function to initialize a Trigger.
     fn new(
         n: &str,
         loc: &str,
@@ -120,6 +153,7 @@ impl Trigger {
     }
 }
 
+/// Parses [`Trigger`] instances from string reference.
 fn parse_triggers(info: &str) -> Vec<Trigger> {
     let trigger_list = split_with_quote_context(info, ',');
     trigger_list
@@ -134,6 +168,8 @@ fn parse_triggers(info: &str) -> Vec<Trigger> {
         .collect()
 }
 
+/// Splits on commas *not* inside brackets.
+/// Similar to [split_with_quote_context] except applies to brackets instead of quotes.
 fn split_with_bracket_context(x: &str) -> Vec<String> {
     let mut is_in_brackets = false;
     let mut start_position = 0;
@@ -156,6 +192,8 @@ fn split_with_bracket_context(x: &str) -> Vec<String> {
     parts
 }
 
+/// Parses bracketed information for positional information.
+/// Used in [parse_positional_info]
 fn parse_bracketed_info(x: &str) -> Vec<i32> {
     let parts = x
         .trim_start_matches('[')
@@ -167,6 +205,7 @@ fn parse_bracketed_info(x: &str) -> Vec<i32> {
     parts
 }
 
+/// Positional Information type options
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum PositionalInfoType {
     A,
@@ -175,6 +214,8 @@ enum PositionalInfoType {
     D,
 }
 
+/// Tags positional information based on conditions
+/// listed in 9a-9d of the reference [document](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf).
 fn tag_pos_info(x: &str) -> (bool, bool, bool) {
     // series of different conditions
     let mut has_brackets = false;
@@ -201,6 +242,8 @@ fn tag_pos_info(x: &str) -> (bool, bool, bool) {
     )
 }
 
+/// Categorizes the positional information tagged from
+/// [tag_pos_info] into a specific category.
 fn categorize_positional_info(
     has_brackets: bool,
     has_comma_inside_brackets: bool,
@@ -219,6 +262,7 @@ fn categorize_positional_info(
     }
 }
 
+/// Structure for Position representing start index, length, and Position Type.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 struct Position {
     start: i32,
@@ -227,6 +271,7 @@ struct Position {
 }
 
 impl Position {
+    /// Initialize new position.
     fn new(start: i32, length: i32, case: PositionalInfoType) -> Position {
         Position {
             start,
@@ -236,6 +281,7 @@ impl Position {
     }
 }
 
+/// Parses out a Vector of [`Position`] types from a string reference.
 fn parse_positional_info(info: &str) -> Vec<Position> {
     let tags = tag_pos_info(info);
     let category = categorize_positional_info(tags.0, tags.1, tags.2);
@@ -295,6 +341,8 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
     }
 }
 
+/// Main struct for entire library.
+/// Represents an entire fielded MMI record as one type.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct MmiOutput {
     id: String,
@@ -310,10 +358,19 @@ pub struct MmiOutput {
 }
 
 impl MmiOutput {
+    /// Parses a hashmap into MMiOutput field types.
+    /// Utilizes all other functionality defined in this module
+    /// to assemble/parse each field into its appropriate format and types.
+    ///
+    /// While this function is useful for building [`MmiOutput`] types,
+    /// [parse_mmi] will probably be **much** more practical since it
+    /// accepts a string reference and does the field tagging/mapping for you.
     pub fn new(parts: HashMap<&str, &str>) -> Self {
         let id = parts["id"].to_string();
         let mmi = parts["mmi"].to_string();
-        let score = parts["score"].parse::<f64>().expect("couldn't parse score value to float");
+        let score = parts["score"]
+            .parse::<f64>()
+            .expect("couldn't parse score value to float");
         let name = parts["name"].to_string();
         let cui = parts["cui"].to_string();
         let semantic_types = parse_semantic_types(parts["semantic_types"]);
@@ -336,6 +393,33 @@ impl MmiOutput {
     }
 }
 
+/// A better alternative to [`MmiOutput::new`]
+/// Takes a string reference, splits it on vertical bar (pipe) characters,
+/// labels each item with its corresponding field name,
+/// passes labeled data into [`MmiOutput::new`].
+///
+/// This effectively converts *each* fielded MMI **line** into an [`MmiOutput`] type.
+/// For example:
+/// ```rust
+/// use mmi_parser;
+/// use std::fs::File;
+/// use std::io::{self, prelude::*, BufReader};
+
+/// fn main() -> io::Result<()> {
+///     let file = File::open("metamap_output.txt")?;
+///     let reader = BufReader::new(file);
+
+///     for line in reader.lines() {
+///         let record = line?.as_str();
+///         let result = parse_mmi(record);
+///         println!("{:?}", result); // must use debug
+///     }
+
+///     Ok(())
+/// }
+/// ```
+///
+/// This is used to scan over lines in fielded MMI output text files in the main CLI.
 pub fn parse_mmi(text: &str) -> MmiOutput {
     let parts = split_text(text);
     let fields = label_parts(parts);
@@ -542,7 +626,7 @@ mod tests {
             loc_position: 124,
             text: "fun times".to_string(),
             part_of_speech: "testing stuff".to_string(),
-            negation: true
+            negation: true,
         };
         assert_eq!(tt, actual_tt);
     }
@@ -553,7 +637,14 @@ mod tests {
         let result = parse_triggers(sample);
         assert_eq!(
             result,
-            [Trigger { name: "Crustacea".to_string(), loc: Location::TI, loc_position: 1, text: "Crustacea".to_string(), part_of_speech: "noun".to_string(), negation: false }]
+            [Trigger {
+                name: "Crustacea".to_string(),
+                loc: Location::TI,
+                loc_position: 1,
+                text: "Crustacea".to_string(),
+                part_of_speech: "noun".to_string(),
+                negation: false
+            }]
         );
     }
 
@@ -587,7 +678,7 @@ mod tests {
                     loc_position: 1,
                     text: "isopod".to_string(),
                     part_of_speech: "adj".to_string(),
-                    negation: false
+                    negation: false,
                 },
                 Trigger {
                     name: "Isopoda".to_string(),
@@ -595,23 +686,24 @@ mod tests {
                     loc_position: 1,
                     text: "Isopoda".to_string(),
                     part_of_speech: "noun".to_string(),
-                    negation: false
-                }
+                    negation: false,
+                },
             ],
             location: Location::Tiab,
             positional_info: vec![
                 Position {
                     start: 228,
                     length: 6,
-                    case: PositionalInfoType::A
+                    case: PositionalInfoType::A,
                 },
                 Position {
                     start: 136,
                     length: 7,
-                    case: PositionalInfoType::A
-                }
+                    case: PositionalInfoType::A,
+                },
             ],
-            tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()]) };
+            tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()]),
+        };
         assert_eq!(expected, MmiOutput::new(map));
     }
 
@@ -632,7 +724,7 @@ mod tests {
                     loc_position: 1,
                     text: "isopod".to_string(),
                     part_of_speech: "adj".to_string(),
-                    negation: false
+                    negation: false,
                 },
                 Trigger {
                     name: "Isopoda".to_string(),
@@ -640,23 +732,23 @@ mod tests {
                     loc_position: 1,
                     text: "Isopoda".to_string(),
                     part_of_speech: "noun".to_string(),
-                    negation: false
-                }
+                    negation: false,
+                },
             ],
             location: Location::Tiab,
             positional_info: vec![
                 Position {
                     start: 228,
                     length: 6,
-                    case: PositionalInfoType::A
+                    case: PositionalInfoType::A,
                 },
                 Position {
                     start: 136,
                     length: 7,
-                    case: PositionalInfoType::A
-                }
+                    case: PositionalInfoType::A,
+                },
             ],
-            tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()])
+            tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()]),
         };
         assert_eq!(expected, parse_mmi(s1));
     }

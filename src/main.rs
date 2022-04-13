@@ -1,3 +1,24 @@
+//! Main Command Line Application for parsing fielded MMI data into
+//! json format.
+//!
+//! **NOTE:** While this interface has an `input_type` argument,
+//! the default value of "txt" is the only *supported* version.
+//! "json" is also a valid option but has been specifically created for
+//! our internal use case [@UK-IPOP](https://github.com/UK-IPOP).
+//!
+//! A simple use case of the tool would look like:
+//! ```bash
+//! mmi_parser data
+//! ```
+//! which would parse all of the `.txt` files inside your data directory.
+//!
+//! The output of the program is a 1:1 mapping where a new file is created for each
+//! file that is parsed.  This helps maintain indexing integrity when scanning MetaMap output.
+//! The output files are in jsonlines format which allows you to buffer-read the files later and
+//! also maintains the integrity of linking each line with its original fielded MMI output.
+//! The output files have the same title as their .txt counterparts plus
+//! a `_parsed` label to ensure clarity that they represent parsed data.
+
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, LineWriter, Write};
 
@@ -6,6 +27,7 @@ use colored::*;
 use clap::Parser;
 use serde_json::{self, Value};
 
+/// Main CLI struct.
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
@@ -17,10 +39,11 @@ struct Cli {
     input_type: String,
 }
 
+/// Main function.
 fn main() {
+    let cli = Cli::parse();
     println!("{}", "MMI Parser".cyan().bold());
     println!("{}", "============".cyan().bold());
-    let cli = Cli::parse();
     println!("Reading files from: {}...", cli.folder.cyan());
 
     match fs::read_dir(cli.folder) {
@@ -73,6 +96,8 @@ fn main() {
     }
 }
 
+/// Parses [`mmi_parser:MmiOutput`] from json as opposed to
+/// from string reference like [`parse_mmi`].
 fn parse_mmi_from_json(mut data: Value) -> Value {
     data.get_mut("encounter")
         .expect("encounter not found")
