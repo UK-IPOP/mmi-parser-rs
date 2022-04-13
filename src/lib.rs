@@ -1,15 +1,16 @@
-//! This module exists to support the primary functions of the
-//! MMI parser.
+//! This crate exists to support the primary functions of the
+//! MMI parser command line tool.
 //!
-//! The public API is thus very limited.
 //!
 //! The primary reference for the field information is found
 //! [here](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf)
-//! and relies on MetaMap 2016.
+//! and relies on MetaMap 2016 or newer.
 //!
-//! The *only* public functionality is: [`MmiOutput`] and [`parse_mmi`].
-//! All functionality is documented for assistance if errors were to occur, but if
-//! using this crate as a library you will only have access to the above items.
+//! The main functionality is encompassed in [`MmiOutput`] and [`parse_mmi`].
+//!
+//! For questions on implementations of the parsing algorithms for specific sections,
+//! please consult the [source](https://github.com/UK-IPOP) which contains well-labeled
+//! and fairly documented functions to parse each type.
 
 extern crate core;
 
@@ -52,7 +53,7 @@ fn parse_semantic_types(semantic_types: &str) -> Vec<String> {
 
 /// Enumeration for Location options.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-enum Location {
+pub enum Location {
     TI,
     AB,
     TX,
@@ -109,13 +110,19 @@ fn split_with_quote_context(x: &str, pattern: char) -> Vec<String> {
 
 /// Struct to represent Trigger information.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-struct Trigger {
-    name: String,
-    loc: Location,
-    loc_position: i32,
-    text: String,
-    part_of_speech: String,
-    negation: bool,
+pub struct Trigger {
+    /// UMLS concept name
+    pub name: String,
+    /// location of text
+    pub loc: Location,
+    /// number of the utterance within the location (starting with 1)
+    pub loc_position: i32,
+    /// the actual text
+    pub text: String,
+    /// determined by MedPost Tagger or Lexical Lookup
+    pub part_of_speech: String,
+    /// True if text is considered negated by MetaMap
+    pub negation: bool,
 }
 
 /// Utility function to convert string reference to boolean.
@@ -132,7 +139,7 @@ fn parse_bool(x: &str) -> bool {
 
 impl Trigger {
     /// New function to initialize a Trigger.
-    fn new(
+    pub fn new(
         n: &str,
         loc: &str,
         loc_pos: &str,
@@ -207,7 +214,7 @@ fn parse_bracketed_info(x: &str) -> Vec<i32> {
 
 /// Positional Information type options
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum PositionalInfoType {
+pub enum PositionalInfoType {
     A,
     B,
     C,
@@ -264,15 +271,18 @@ fn categorize_positional_info(
 
 /// Structure for Position representing start index, length, and Position Type.
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-struct Position {
-    start: i32,
-    length: i32,
-    case: PositionalInfoType,
+pub struct Position {
+    /// Start position
+    pub start: i32,
+    /// Length of matched text
+    pub length: i32,
+    /// Type of match
+    pub case: PositionalInfoType,
 }
 
 impl Position {
     /// Initialize new position.
-    fn new(start: i32, length: i32, case: PositionalInfoType) -> Position {
+    pub fn new(start: i32, length: i32, case: PositionalInfoType) -> Position {
         Position {
             start,
             length,
@@ -345,16 +355,26 @@ fn parse_positional_info(info: &str) -> Vec<Position> {
 /// Represents an entire fielded MMI record as one type.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct MmiOutput {
-    id: String,
-    mmi: String,
-    score: f64,
-    name: String,
-    cui: String,
-    semantic_types: Vec<String>,
-    triggers: Vec<Trigger>,
-    location: Location,
-    positional_info: Vec<Position>,
-    tree_codes: Option<Vec<String>>,
+    /// unique identifier
+    pub id: String,
+    /// always MMI
+    pub mmi: String,
+    /// score of concept relevance, 0-1000, 1000 being perfect
+    pub score: f64,
+    /// name of the concept matched
+    pub name: String,
+    /// CUI for identified UMLS concept
+    pub cui: String,
+    /// Semantic Type abbreviations
+    pub semantic_types: Vec<String>,
+    /// Triggers for MMI to flag this concept
+    pub triggers: Vec<Trigger>,
+    /// Location of concept
+    pub location: Location,
+    /// Positional information of concept
+    pub positional_info: Vec<Position>,
+    /// Optional MeSH [tree code(s)](https://www.nlm.nih.gov/mesh/meshhome.html)
+    pub tree_codes: Option<Vec<String>>,
 }
 
 impl MmiOutput {
@@ -398,6 +418,15 @@ impl MmiOutput {
 /// labels each item with its corresponding field name,
 /// passes labeled data into [`MmiOutput::new`].
 ///
+/// This is used to scan over lines in fielded MMI output text files in the main CLI.
+///
+/// Arguments:
+/// * text: a string reference representing a single line of MMI output
+///
+/// Returns:
+/// * [`MmiOutput`]
+///
+///
 /// This effectively converts *each* fielded MMI **line** into an [`MmiOutput`] type.
 /// For example:
 ///
@@ -418,8 +447,6 @@ impl MmiOutput {
 ///     Ok(())
 /// }
 /// ```
-///
-/// This is used to scan over lines in fielded MMI output text files in the main CLI.
 pub fn parse_mmi(text: &str) -> MmiOutput {
     let parts = split_text(text);
     let fields = label_parts(parts);
