@@ -7,7 +7,7 @@ description = "A parser for Fielded MetaMap (MMI) output."
 license = "MIT"
 repository = "https://github.com/UK-IPOP/mmi-parser-rs"
 keywords = ["cli", "metamap", "mmi", "parser"]
-categories = ["command-line interface", "parsing tools"]
+categories = ["command-line-interface", "parsing"]
 readme = "README.md"
 
 
