@@ -1,6 +1,6 @@
 [package]
 name = "mmi-parser"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["Nick Anthony <nicholas.anthony@uky.edu>"]
 description = "A parser for Fielded MetaMap (MMI) output."
