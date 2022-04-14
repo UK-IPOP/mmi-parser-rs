@@ -6,7 +6,6 @@
 
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, LineWriter, Write};
-use std::path::Path;
 
 use colored::*;
 
@@ -17,7 +16,7 @@ const INPUT_TYPE: &str = "txt";
 fn main() {
     println!("{}", "MMI Parser".cyan().bold());
     println!("{}", "============".cyan().bold());
-    println!("Reading files from: {:?}...", FOLDER.cyan());
+    println!("Reading files from: {}", FOLDER.cyan());
 
     match fs::read_dir(FOLDER) {
         Ok(files) => {
@@ -37,10 +36,10 @@ fn main() {
                     for line in reader.lines().flatten() {
                         let result = mmi_parser::parse_mmi(&line);
                         if result.is_err() {
-                            panic!("stuff happende")
+                            panic!("Example failed! 😭")
                         }
-                        let json_val =
-                            serde_json::to_value(result.unwrap()).expect("unable to serialize json");
+                        let json_val = serde_json::to_value(result.unwrap())
+                            .expect("unable to serialize json");
                         let json_string =
                             serde_json::to_string(&json_val).expect("unable to deserialize json");
                         out_writer.write_all(json_string.as_bytes()).unwrap();
