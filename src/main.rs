@@ -34,7 +34,6 @@ use clap::Parser;
 #[clap(author, version)]
 struct Cli {
     /// Folder to read files from
-    #[clap(short, long)]
     folder: String,
 }
 
