@@ -1,0 +1,7 @@
+23074487|AA|FY|fiscal years|1|2|3|12|9362:2
+23074399|AA|DORs|diagnostic odds ratios|1|4|5|22|8926:4
+17342196|AA|PCBs|polychlorinated biphenyls|1|4|3|25|2304:4
+23074488|AA|ART|assisted reproductive technologies|1|3|5|34|1197:3
+12952502|AA|VRBPAC|Vaccination and Related Biologicals Products Advisory Committee|1|6|13|63|9946:6
+23074402|AA|THETA|Toronto Health Economics and Technology Assessment Collaborative|1|5|13|64|1291:5
+23074475|AA|INAHTA|International Network of Agencies for Health Technology Assessments|1|6|15|67|8780:6
