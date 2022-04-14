@@ -21,6 +21,8 @@ use std::io::{BufRead, BufReader, LineWriter, Write};
 use colored::*;
 
 use clap::Parser;
+use indicatif::{ProgressBar, ProgressStyle};
+use walkdir::WalkDir;
 
 /// A simple program to parse fielded MMI output from txt into jsonl.
 ///
@@ -37,12 +39,40 @@ struct Cli {
     folder: String,
 }
 
+fn initialize_progress(items: u64) -> ProgressBar {
+    let pb = ProgressBar::new(items);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({eta})",
+            )
+            .progress_chars("#>-"),
+    );
+    pb
+}
 /// Main function.
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
     println!("{}", "MMI Parser".cyan().bold());
     println!("{}", "============".cyan().bold());
-    println!("Reading files from: {}", cli.folder.cyan());
+    println!(
+        "{} {}",
+        "Reading files from:".cyan(),
+        cli.folder.cyan().bold()
+    );
+
+    let walker = WalkDir::new(&cli.folder);
+
+    let mut file_count = 0;
+    for e in walker.into_iter() {
+        let name = e.unwrap();
+        if name.file_name().to_str().unwrap().ends_with(".txt") {
+            file_count += 1
+        }
+    }
+
+    println!("{}", file_count);
+    let bar = initialize_progress(file_count as u64);
 
     match fs::read_dir(cli.folder) {
         Ok(files) => {
@@ -51,8 +81,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let path = file.path();
                 let filename = path.to_str().expect("could not parse file path");
                 if filename.ends_with(".txt") {
-                    println!("Reading file: {}", filename.cyan());
-
                     let out_file_name = filename.replace(".txt", "_parsed.jsonl").to_string();
                     let out_file =
                         fs::File::create(&out_file_name).expect("could not create output file");
@@ -71,13 +99,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 out_writer.write_all(json_string.as_bytes()).unwrap();
                                 out_writer.write_all(b"\n").unwrap();
                             }
-                            Err(e) => panic!("{:?}", e),
+                            Err(e) => {
+                                println!("{}", filename.red().bold());
+                                return Err(Box::new(e));
+                            }
                         }
                     }
                 }
+                bar.inc(1)
             }
         }
-        Err(e) => return Err(Box::new(e)),
+        Err(e) => {
+            println!("couldn't scan directory");
+            return Err(Box::new(e));
+        }
     }
+    bar.finish_and_clear();
+    println!("{}", "Done.".cyan());
     Ok(())
 }

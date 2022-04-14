@@ -18,7 +18,7 @@
 @build-prod: clean check test
     cargo build --release
 
-@test: clean
+@test:
     cargo test
 
 @doc: clean check
