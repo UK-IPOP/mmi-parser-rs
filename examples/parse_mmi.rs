@@ -36,7 +36,7 @@ fn main() {
                     for line in reader.lines().flatten() {
                         let result = mmi_parser::parse_mmi(&line);
                         if result.is_err() {
-                            panic!("Example failed! 😭")
+                            panic!("Example failed!")
                         }
                         let json_val = serde_json::to_value(result.unwrap())
                             .expect("unable to serialize json");
