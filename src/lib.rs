@@ -6,7 +6,7 @@
 //! [here](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf)
 //! and relies on MetaMap 2016 or newer.
 //!
-//! The main functionality is encompassed in [`MmiOutput`] and [`parse_mmi`].
+//! The main functionality is encompassed in [`MmiOutput`], [`AaOutput`], and [`parse_mmi`].
 //!
 //! For questions on implementations of the parsing algorithms for specific sections,
 //! please consult the [source](https://github.com/UK-IPOP) which contains well-labeled
@@ -16,6 +16,8 @@ extern crate core;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 
 /// Splits the provided string reference on vertical bar (pipe symbol)
@@ -26,7 +28,7 @@ fn split_text(text: &str) -> Vec<&str> {
 
 /// Labels the parts of the pipe-split string using MMI field labels.
 /// Returns a hashmap of field names as keys and their values from the vector.
-fn label_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
+fn label_mmi_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
     let mut map = HashMap::new();
     map.insert("id", parts[0]);
     map.insert("mmi", parts[1]);
@@ -61,15 +63,15 @@ pub enum Location {
 }
 
 impl FromStr for Location {
-    type Err = ();
+    type Err = ValueError;
     /// Parses a Location type from a string reference.
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Location, ValueError> {
         match s.to_uppercase().as_str() {
             "TI" => Ok(Location::TI),
             "AB" => Ok(Location::AB),
             "TX" => Ok(Location::TX),
             "TI;AB" => Ok(Location::Tiab),
-            _ => Err(()),
+            _ => Err(ValueError),
         }
     }
 }
@@ -413,48 +415,206 @@ impl MmiOutput {
     }
 }
 
-/// A better alternative to [`MmiOutput::new`]
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Output {
+    MMI(MmiOutput),
+    AA(AaOutput),
+}
+
+/// A better alternative to [`MmiOutput::new`] or [`AaOutput::new`]
 /// Takes a string reference, splits it on vertical bar (pipe) characters,
 /// labels each item with its corresponding field name,
-/// passes labeled data into [`MmiOutput::new`].
+/// passes labeled data into [`MmiOutput::new`] or [`AaOutput::new`].
 ///
 /// This is used to scan over lines in fielded MMI output text files in the main CLI.
+/// It detects whether the record is MMI or not by looking at the second item in the pipe-delimited
+/// vector and whether it matches MMI, AA/UA, or neither.
 ///
 /// Arguments:
-/// * text: a string reference representing a single line of MMI output
+/// * text: a string reference representing a single line of MMI/AA output
 ///
 /// Returns:
-/// * [`MmiOutput`]
+/// * Result<Output, Error>: An enumeration with MMI::MmiOutput and AA::AaOutput options. Could return
+/// error if a valid option is not found in the second vector position.
 ///
-///
-/// This effectively converts *each* fielded MMI **line** into an [`MmiOutput`] type.
+/// This effectively converts *each* fielded MMI **line** into an [`Output`] of either MMI or AA type..
 /// For example:
 ///
 /// ```rust
 /// use std::fs::File;
 /// use std::io::{self, prelude::*, BufReader};
-
-/// fn main() -> io::Result<()> {
-///     let file = File::open("data/sample.txt")?;
+/// use std::error::Error;
+///
+/// fn main() -> Result<(), Box<dyn Error>> {
+///     let file = File::open("data/MMI_sample.txt")?;
+///     // or for AA records
+///     // let file = File::open("data/AA_sample.txt"?);
 ///     let reader = BufReader::new(file);
-
+///
 ///     for line in reader.lines() {
 ///         let record = line?;
 ///         let result = mmi_parser::parse_mmi(record.as_str());
-///         println!("{:?}", result); // must use debug
+///         println!("{:?}", result?); // must use debug
 ///     }
-
+///
 ///     Ok(())
 /// }
 /// ```
-pub fn parse_mmi(text: &str) -> MmiOutput {
+pub fn parse_mmi(text: &str) -> Result<Output> {
     let parts = split_text(text);
-    let fields = label_parts(parts);
-    MmiOutput::new(fields)
+    match parts[1] {
+        "MMI" => {
+            let fields = label_mmi_parts(parts);
+            let output = MmiOutput::new(fields);
+            Ok(Output::MMI(output))
+        }
+        "AA" | "UA" => {
+            let fields = label_aa_parts(parts);
+            let output = AaOutput::new(fields);
+            Ok(Output::AA(output))
+        }
+        _ => Err(ValueError),
+    }
+}
+
+/// An alternative Result implementation using [`ValueError`]
+pub type Result<T> = std::result::Result<T, ValueError>;
+
+/// ValueError occurs when an invalid value was provided
+#[derive(Debug)]
+pub struct ValueError;
+
+impl Display for ValueError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Received an unexpected value")
+    }
+}
+
+impl Error for ValueError {}
+
+/// Which type of abbreviation (AA) record exists, either AA or UA (user-defined)
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum AbbreviationType {
+    /// MetaMap Acronyms and Abbreviations
+    AA,
+    /// User defined Acronyms and Abbreviations
+    UA,
+}
+
+impl FromStr for AbbreviationType {
+    type Err = ValueError;
+    /// Parses an Abbreviation Type from a string reference.
+    fn from_str(s: &str) -> std::result::Result<Self, ValueError> {
+        match s.to_uppercase().as_str() {
+            "AA" => Ok(AbbreviationType::AA),
+            "UA" => Ok(AbbreviationType::UA),
+            _ => Err(ValueError),
+        }
+    }
+}
+
+/// Abbreviation and Acronym position information
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct AaPosInfo {
+    pub start: i32,
+    pub length: i32,
+}
+
+impl AaPosInfo {
+    /// New function to create positional info type from two str references
+    pub fn new(s: &str, l: &str) -> Self {
+        let ss = s
+            .parse::<i32>()
+            .expect("could not parse start position to integer");
+        let ll = l.parse::<i32>().expect("could not parse length to integer");
+        AaPosInfo {
+            start: ss,
+            length: ll,
+        }
+    }
+}
+
+/// Main "Secondary" type of program
+/// Acronyms and Abbreviations detected by MetaMap
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct AaOutput {
+    /// Unique identifier
+    pub id: String,
+    /// Abbreviation type: either MetaMap defined or User-defined
+    pub abbreviation_type: AbbreviationType,
+    /// Short form of the acronym/abbreviation
+    pub short_form: String,
+    /// Long form or expansion
+    pub long_form: String,
+    /// number of tokens (including whitespace) in short form
+    pub short_token_count: i32,
+    /// number of characters in short form
+    pub short_character_count: i32,
+    /// number of tokens (including whitespace) in long form
+    pub long_token_count: i32,
+    /// number of characters in long form
+    pub long_character_count: i32,
+    /// starting position of short form followed by ":" followed by character length of short form
+    pub positional_info: AaPosInfo,
+}
+
+impl AaOutput {
+    /// New function for AA types
+    ///
+    /// Mostly handles parsing strings to integers, also tags the abbreviation type and positional information.
+    pub fn new(parts: HashMap<&str, &str>) -> Self {
+        let id = parts["id"].to_string();
+        let abbreviation_type = AbbreviationType::from_str(parts["abbreviation_type"])
+            .expect("couldn't parse abbreviation type (AA or UA)");
+        let short_form = parts["short_form"].to_string();
+        let long_form = parts["long_form"].to_string();
+        let short_token_count = parts["short_token_count"]
+            .parse::<i32>()
+            .expect("couldn't parse string to integer.");
+        let short_character_count = parts["short_character_count"]
+            .parse::<i32>()
+            .expect("couldn't parse string to integer.");
+        let long_token_count = parts["long_token_count"]
+            .parse::<i32>()
+            .expect("couldn't parse string to integer.");
+        let long_character_count = parts["long_character_count"]
+            .parse::<i32>()
+            .expect("couldn't parse string to integer.");
+        let position_parts: Vec<&str> = parts["positional_info"].split(':').collect();
+        let positional_info = AaPosInfo::new(position_parts[0], position_parts[1]);
+        AaOutput {
+            id,
+            abbreviation_type,
+            short_form,
+            long_form,
+            short_token_count,
+            short_character_count,
+            long_token_count,
+            long_character_count,
+            positional_info,
+        }
+    }
+}
+
+/// Labels AA records with the corresponding field names
+pub fn label_aa_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
+    let mut map: HashMap<&str, &str> = HashMap::new();
+    map.insert("id", parts[0]);
+    map.insert("abbreviation_type", parts[1]);
+    map.insert("short_form", parts[2]);
+    map.insert("long_form", parts[3]);
+    map.insert("short_token_count", parts[4]);
+    map.insert("short_character_count", parts[5]);
+    map.insert("long_token_count", parts[6]);
+    map.insert("long_character_count", parts[7]);
+    map.insert("positional_info", parts[8]);
+    map
 }
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
+
     use super::*;
 
     #[test]
@@ -540,7 +700,7 @@ mod tests {
     #[test]
     fn test_name_parts() {
         let sample = "24119710|MMI|637.30|Isopoda|C0598806|[euka]|[\"Isopod\"-ab-1-\"isopod\"-adj-0,\"Isopoda\"-ti-1-\"Isopoda\"-noun-0]|TI;AB|228/6;136/7|B01.050.500.131.365.400";
-        assert_eq!(label_parts(split_text(sample)), {
+        assert_eq!(label_mmi_parts(split_text(sample)), {
             let mut map = HashMap::new();
             map.insert("id", "24119710");
             map.insert("mmi", "MMI");
@@ -735,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_mmi() {
+    fn test_parse_mmi_for_mmi() {
         let s1 = "3124119710|MMI|637.30|Isopoda|C0598806|[euka]|[\"Isopod\"-ab-1-\"isopod\"-adj-0,\"Isopoda\"-ti-1-\"Isopoda\"-noun-0]|TI;AB|228/6;136/7|B01.050.500.131.365.400";
         let expected = MmiOutput {
             id: "3124119710".to_string(),
@@ -777,6 +937,40 @@ mod tests {
             ],
             tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()]),
         };
-        assert_eq!(expected, parse_mmi(s1));
+        let parsed = match parse_mmi(s1).unwrap() {
+            Output::MMI(x) => x,
+            _ => panic!("stuff"),
+        };
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_parse_mmi_for_aa() {
+        let s1 = "23074487|AA|FY|fiscal years|1|2|3|12|9362:2";
+        let expected = match parse_mmi(s1).unwrap() {
+            Output::AA(x) => x,
+            _ => panic!("stuff"),
+        };
+        println!("{:?}", expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_panic_parse_mmi() {
+        let s1 = "asda|fake|other stuff|";
+        parse_mmi(s1).unwrap();
+    }
+
+    #[test]
+    fn test_abbreviation_type() {
+        assert_eq!(
+            AbbreviationType::AA,
+            AbbreviationType::from_str("AA").unwrap()
+        );
+        assert_eq!(
+            AbbreviationType::UA,
+            AbbreviationType::from_str("UA").unwrap()
+        );
+        assert!(AbbreviationType::from_str("asfnkjsanf").is_err())
     }
 }
