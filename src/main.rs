@@ -50,9 +50,24 @@ fn initialize_progress(items: u64) -> ProgressBar {
     );
     pb
 }
+
+fn get_total_files(target_folder: &str) -> Result<usize, Box<dyn Error>> {
+    let walker = WalkDir::new(target_folder);
+    let mut file_count = 0;
+    for e in walker.into_iter() {
+        let entry = e?;
+        let fname = entry.file_name().to_str().ok_or(std::fmt::Error)?;
+        if fname.ends_with(".txt") {
+            file_count += 1
+        }
+    }
+    Ok(file_count)
+}
+
 /// Main function.
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
+    println!();
     println!("{}", "MMI Parser".cyan().bold());
     println!("{}", "============".cyan().bold());
     println!(
@@ -61,35 +76,44 @@ fn main() -> Result<(), Box<dyn Error>> {
         cli.folder.cyan().bold()
     );
 
-    let walker = WalkDir::new(&cli.folder);
-
-    let mut file_count = 0;
-    for e in walker.into_iter() {
-        let name = e.unwrap();
-        if name.file_name().to_str().unwrap().ends_with(".txt") {
-            file_count += 1
+    let file_count = get_total_files(&cli.folder);
+    let bar = match file_count {
+        Ok(fc) => initialize_progress(fc as u64),
+        Err(_e) => {
+            println!(
+                "{}Had trouble reading some of your files... clean up and try again later?",
+                "ERROR: ".red().bold(),
+            );
+            println!("Exiting...");
+            std::process::exit(1);
         }
-    }
-
-    println!("{}", file_count);
-    let bar = initialize_progress(file_count as u64);
+    };
 
     match fs::read_dir(cli.folder) {
         Ok(files) => {
             for file in files {
-                let file = file.expect("Could not process file.");
+                let file = file?;
                 let path = file.path();
                 let filename = path.to_str().expect("could not parse file path");
                 if filename.ends_with(".txt") {
                     let out_file_name = filename.replace(".txt", "_parsed.jsonl").to_string();
-                    let out_file =
-                        fs::File::create(&out_file_name).expect("could not create output file");
-                    let mut out_writer = LineWriter::new(out_file);
+                    let out_file = fs::File::create(&out_file_name);
+                    if out_file.is_err() {
+                        println!("Could not create output file for {}.", &filename);
+                        println!("Exiting...");
+                        std::process::exit(1);
+                    }
+                    let mut out_writer = LineWriter::new(out_file?);
                     // utilize read lines buffer
-                    let file = File::open(&path).expect("could not open file");
-                    let reader = BufReader::new(file);
-                    for line in reader.lines().flatten() {
-                        let result = mmi_parser::parse_mmi(&line);
+                    let file = File::open(&path);
+                    if file.is_err() {
+                        println!("Could not open {}.", &filename);
+                        println!("Skipping file...");
+                        continue;
+                    }
+                    let reader = BufReader::new(file?);
+                    for (i, line) in reader.lines().flatten().enumerate() {
+                        let result = mmi_parser::parse_record(&line);
                         match result {
                             Ok(val) => {
                                 let json_val =
@@ -99,9 +123,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 out_writer.write_all(json_string.as_bytes()).unwrap();
                                 out_writer.write_all(b"\n").unwrap();
                             }
-                            Err(e) => {
-                                println!("{}", filename.red().bold());
-                                return Err(Box::new(e));
+                            Err(_e) => {
+                                println!(
+                                    "{err} in {file_name} on line {line_number}.",
+                                    err = "ERROR".red().bold(),
+                                    file_name = &filename,
+                                    line_number = i + i
+                                );
+                                println!("Line contents: {}", &line);
+                                println!("Skipping line...");
+                                continue;
                             }
                         }
                     }
@@ -110,11 +141,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         Err(e) => {
-            println!("couldn't scan directory");
+            println!(
+                "{err} Couldn't scan target directory",
+                err = "ERROR".red().bold()
+            );
             return Err(Box::new(e));
         }
     }
     bar.finish_and_clear();
-    println!("{}", "Done.".cyan());
+    println!("{}", "Done.".bright_green().bold());
     Ok(())
 }
