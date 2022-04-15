@@ -34,7 +34,7 @@ fn main() {
                     let file = File::open(&path).expect("could not open file");
                     let reader = BufReader::new(file);
                     for line in reader.lines().flatten() {
-                        let result = mmi_parser::parse_mmi(&line);
+                        let result = mmi_parser::parse_record(&line);
                         if result.is_err() {
                             panic!("Example failed!")
                         }
