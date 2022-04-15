@@ -103,6 +103,14 @@ USER|MMI|5.18|Primary malignant neoplasm of lung|C1306460|[neop]|["Lung cancer"-
 
 You could try to hack your way around piping the output of MetaMap to this tool but it is beyond the scope for our use case.
 
+I would recommend `sed` to remove these headers. While it is not the _most_ performant option, its use is straightforward. Simply:
+
+```bash
+sed -i '1d' <target folder>/*.txt
+```
+
+The `-i` removes the headers in place, and the `'1d` simply means delete the first line.
+
 ### mmi-parser (CLI)
 
 Once you have some MetaMap output, you can parse it into jsonlines simply by specifying the folder in which your output lives. The `mmi-parser` will go through each line in each `.txt` file in the specified directory and parse it into jsonlines.
