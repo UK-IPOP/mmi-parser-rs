@@ -15,10 +15,10 @@
 @build: check
     cargo build 
 
-@build-prod: clean check test
+@build-prod: clean test
     cargo build --release
 
-@test:
+@test: check
     cargo test
 
 @doc: clean check
