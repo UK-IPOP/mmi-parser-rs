@@ -8,7 +8,6 @@ The primary reference for the Fielded MMI output can be found [here](https://lhn
 
 - [`mmi-parser`](#mmi-parser)
   - [Description](#description)
-    - [Justification](#justification)
   - [Requires](#requires)
   - [Installation](#installation)
   - [Usage](#usage)
@@ -23,8 +22,6 @@ The primary reference for the Fielded MMI output can be found [here](https://lhn
 
 ## Description
 
-### Justification
-
 Due to the (relatively) technical nature of running the MetaMap program (locally requires command line familiarity), it is assumed users will also be able to install and work with other command line tools (i.e. cargo).
 
 This project uses [Rust](https://www.rust-lang.org) to parse the Fielded MMI output into
@@ -33,6 +30,8 @@ This project uses [Rust](https://www.rust-lang.org) to parse the Fielded MMI out
 MMI is by far the most dense/compressed **human-readable** version of MetaMap output, so it makes logical sense to use as input to the parser.
 
 MMI output is often put into separate `.txt` files for each record being run through MetaMap. MMI output also contains one line per concept found. Jsonlines allows us to keep this 1:1 ratio. Each input `.txt` file will have _exactly one_ jsonlines output file with `_parsed` suffixed to the file name to clarify it is parsed output. Jsonlines also has the added benefit of maintaining the 1:1 (concept:line) ratio that the original MMI output has. Thus each jsonline can be tracked to a line in the source (MMI output) text file. This helps with tracing results. Jsonlines, compared to traditional json, also allows file buffer reading which can be a benefit when scanning large files. Finally, while MMI already has fields _associated_ with various parts of the text, jsonlines makes these _implicit_ associations **explicit** in field names.
+
+One drawback of outputting jsonlines is that the resulting data structure is quite nested (although that is unavoidable due to the _highly_ nested nature of MMI which is used to keep the output dense). While this isn't a problem for data modeling, it may introduce some complications, for example, when trying to analyze the data in a tabular format like dataframes.
 
 For example:
 
