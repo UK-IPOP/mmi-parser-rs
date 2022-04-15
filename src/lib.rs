@@ -6,7 +6,7 @@
 //! [here](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf)
 //! and relies on MetaMap 2016 or newer.
 //!
-//! The main functionality is encompassed in [`MmiOutput`], [`AaOutput`], and [`parse_mmi`].
+//! The main functionality is encompassed in [`MmiOutput`], [`AaOutput`], and [`parse_record`].
 //!
 //! For questions on implementations of the parsing algorithms for specific sections,
 //! please consult the [source](https://github.com/UK-IPOP) which contains well-labeled
@@ -16,9 +16,25 @@ extern crate core;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::error::Error;
 use std::fmt::{self, Display};
+use std::num::ParseIntError;
 use std::str::FromStr;
+use std::{error, result};
+
+/// ValueError occurs when an invalid value was provided
+#[derive(Debug)]
+pub struct ValueError;
+
+impl Display for ValueError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Received an unexpected value")
+    }
+}
+
+impl error::Error for ValueError {}
+
+/// A custom result type implementing [`ValueError`]
+type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 /// Splits the provided string reference on vertical bar (pipe symbol)
 /// and collects split into vector.
@@ -28,7 +44,14 @@ fn split_text(text: &str) -> Vec<&str> {
 
 /// Labels the parts of the pipe-split string using MMI field labels.
 /// Returns a hashmap of field names as keys and their values from the vector.
-fn label_mmi_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
+fn label_mmi_parts(parts: Vec<&str>) -> Result<HashMap<&str, &str>> {
+    if parts.len() != 10 {
+        println!(
+            "Record is not of the right length, expected 10 pipe-separated components, found {}",
+            parts.len()
+        );
+        return Err(Box::new(ValueError));
+    }
     let mut map = HashMap::new();
     map.insert("id", parts[0]);
     map.insert("mmi", parts[1]);
@@ -40,17 +63,14 @@ fn label_mmi_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
     map.insert("location", parts[7]);
     map.insert("positional_info", parts[8]);
     map.insert("tree_codes", parts[9]);
-    map
+    Ok(map)
 }
 
 /// Parses out semantic type field by removing brackets and splitting on commas.
 fn parse_semantic_types(semantic_types: &str) -> Vec<String> {
-    let cleaned = semantic_types
-        .strip_prefix('[')
-        .unwrap()
-        .strip_suffix(']')
-        .unwrap();
-    cleaned.split(',').map(|x| x.to_string()).collect()
+    let cleaned = semantic_types.trim_start_matches('[').trim_end_matches(']');
+    let clean_list = cleaned.split(',').map(|x| x.to_string()).collect();
+    clean_list
 }
 
 /// Enumeration for Location options.
@@ -129,13 +149,16 @@ pub struct Trigger {
 
 /// Utility function to convert string reference to boolean.
 ///
-/// Will panic if string reference is not "1" or "0" because
+/// Will error if string reference is not "1" or "0" because
 /// that is the expected output from MetaMap.
-fn parse_bool(x: &str) -> bool {
+fn parse_bool(x: &str) -> Result<bool> {
     match x {
-        "1" => true,
-        "0" => false,
-        _ => panic!("Unexpected boolean: {}", x),
+        "1" => Ok(true),
+        "0" => Ok(false),
+        _ => {
+            println!("Unexpected boolean: {}", x);
+            Err(Box::new(ValueError))
+        }
     }
 }
 
@@ -147,7 +170,7 @@ impl Trigger {
         loc_pos: &str,
         t: &str,
         part_of_speech: &str,
-        negation: &str,
+        neg: bool,
     ) -> Trigger {
         Trigger {
             name: n.replace('\"', ""),
@@ -157,24 +180,34 @@ impl Trigger {
                 .expect("unable to parse integer from location"),
             text: t.replace('\"', ""),
             part_of_speech: part_of_speech.replace('\"', ""),
-            negation: parse_bool(negation),
+            negation: neg,
         }
     }
 }
 
 /// Parses [`Trigger`] instances from string reference.
-fn parse_triggers(info: &str) -> Vec<Trigger> {
+fn parse_triggers(info: &str) -> Result<Vec<Trigger>> {
+    let mut triggers: Vec<Trigger> = Vec::new();
     let trigger_list = split_with_quote_context(info, ',');
-    trigger_list
-        .iter()
-        .map(|t| {
-            let clean = t.trim_start_matches('[').trim_end_matches(']');
-            let parts = split_with_quote_context(clean, '-');
-            Trigger::new(
-                &parts[0], &parts[1], &parts[2], &parts[3], &parts[4], &parts[5],
-            )
-        })
-        .collect()
+    for t in trigger_list {
+        let clean = t.trim_start_matches('[').trim_end_matches(']');
+        let parts = split_with_quote_context(clean, '-');
+        if parts.len() != 6 {
+            println!(
+                "Trigger format does not make sense, expected sextuple (6), got {} parts instead.",
+                &parts.len()
+            );
+            return Err(Box::new(ValueError));
+        } else {
+            // valid shape
+            let negation = parse_bool(&parts[5])?;
+            let trigger = Trigger::new(
+                &parts[0], &parts[1], &parts[2], &parts[3], &parts[4], negation,
+            );
+            triggers.push(trigger)
+        }
+    }
+    Ok(triggers)
 }
 
 /// Splits on commas *not* inside brackets.
@@ -203,15 +236,13 @@ fn split_with_bracket_context(x: &str) -> Vec<String> {
 
 /// Parses bracketed information for positional information.
 /// Used in [parse_positional_info]
-fn parse_bracketed_info(x: &str) -> Vec<i32> {
-    let parts = x
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .split('/')
-        .map(|x| x.parse::<i32>().expect("could not parse integer"))
+fn parse_bracketed_info(x: &str) -> result::Result<Vec<i32>, ParseIntError> {
+    let parts = x.trim_start_matches('[').trim_end_matches(']').split('/');
+    let collected = parts
         .into_iter()
-        .collect::<Vec<i32>>();
-    parts
+        .map(|p| p.parse::<i32>())
+        .collect::<result::Result<Vec<i32>, ParseIntError>>()?;
+    Ok(collected)
 }
 
 /// Positional Information type options
@@ -257,17 +288,18 @@ fn categorize_positional_info(
     has_brackets: bool,
     has_comma_inside_brackets: bool,
     has_comma_outside_brackets: bool,
-) -> PositionalInfoType {
+) -> Result<PositionalInfoType> {
     if !has_comma_outside_brackets && !has_comma_inside_brackets {
-        PositionalInfoType::A
-    } else if (has_comma_inside_brackets || has_comma_outside_brackets) && !has_brackets {
-        PositionalInfoType::B
-    } else if has_brackets && !has_comma_inside_brackets && has_comma_outside_brackets {
-        PositionalInfoType::C
-    } else if has_comma_outside_brackets && has_brackets && has_comma_inside_brackets {
-        PositionalInfoType::D
+        Ok(PositionalInfoType::A)
+    } else if !has_brackets && has_comma_outside_brackets {
+        Ok(PositionalInfoType::B)
+    } else if has_brackets && has_comma_outside_brackets && !has_comma_inside_brackets {
+        Ok(PositionalInfoType::C)
+    } else if has_brackets && has_comma_outside_brackets && has_comma_inside_brackets {
+        Ok(PositionalInfoType::D)
     } else {
-        panic!("could not parse positional information.")
+        println!("could not parse positional information.");
+        Err(Box::new(ValueError))
     }
 }
 
@@ -293,63 +325,66 @@ impl Position {
     }
 }
 
+/// Simple utility function to check whether
+pub fn check_parts(parts: &[&str]) -> Result<()> {
+    if parts.len() != 2 {
+        return Err(Box::new(ValueError));
+    }
+    Ok(())
+}
+
+pub fn parse_position_parts(position_str: &str, case: PositionalInfoType) -> Result<Position> {
+    let parts = position_str.split('/').collect::<Vec<&str>>();
+    check_parts(&parts)?;
+    let p1 = parts[0].parse::<i32>()?;
+    let p2 = parts[1].parse::<i32>()?;
+    Ok(Position::new(p1, p2, case))
+}
+
 /// Parses out a Vector of [`Position`] types from a string reference.
-fn parse_positional_info(info: &str) -> Vec<Position> {
+fn parse_positional_info(info: &str) -> Result<Vec<Position>> {
     let tags = tag_pos_info(info);
-    let category = categorize_positional_info(tags.0, tags.1, tags.2);
+    let category = categorize_positional_info(tags.0, tags.1, tags.2)?;
+    let mut positions: Vec<Position> = Vec::new();
     match category {
-        PositionalInfoType::A => info
-            .split(';')
-            .map(|x| {
-                let parts = x
-                    .split('/')
-                    .map(|x| x.parse::<i32>().expect(x))
-                    .collect::<Vec<i32>>();
-                Position::new(parts[0], parts[1], PositionalInfoType::A)
-            })
-            .collect(),
-        PositionalInfoType::B => info
-            .split(';')
-            .flat_map(|f| {
-                f.split(',')
-                    .map(|x| {
-                        let parts = x
-                            .split('/')
-                            .map(|x| x.parse::<i32>().expect("could not parse integer"))
-                            .collect::<Vec<i32>>();
-                        Position::new(parts[0], parts[1], PositionalInfoType::B)
-                    })
-                    .collect::<Vec<Position>>()
-            })
-            .collect::<Vec<Position>>(),
-        PositionalInfoType::C => info
-            .split(';')
-            .flat_map(|f| {
-                f.split(',')
-                    .map(|x| {
-                        let parts = parse_bracketed_info(x);
-                        Position::new(parts[0], parts[1], PositionalInfoType::C)
-                    })
-                    .collect::<Vec<Position>>()
-            })
-            .collect::<Vec<Position>>(),
-        PositionalInfoType::D => info
-            .split(';')
-            .flat_map(|f| {
-                let split_parts = split_with_bracket_context(f);
-                split_parts
-                    .iter()
-                    .flat_map(|y| {
-                        y.split(',')
-                            .map(|x| {
-                                let parts = parse_bracketed_info(x);
-                                Position::new(parts[0], parts[1], PositionalInfoType::D)
-                            })
-                            .collect::<Vec<Position>>()
-                    })
-                    .collect::<Vec<Position>>()
-            })
-            .collect(),
+        PositionalInfoType::A => {
+            for section in info.split(';') {
+                let p = parse_position_parts(section, PositionalInfoType::A)?;
+                positions.push(p);
+            }
+            Ok(positions)
+        }
+        PositionalInfoType::B => {
+            for section in info.split(';') {
+                for subsection in section.split(',') {
+                    let p = parse_position_parts(subsection, PositionalInfoType::B)?;
+                    positions.push(p);
+                }
+            }
+            Ok(positions)
+        }
+        PositionalInfoType::C => {
+            for section in info.split(';') {
+                for subsection in section.split(',') {
+                    let parts = parse_bracketed_info(subsection)?;
+                    let p = Position::new(parts[0], parts[1], PositionalInfoType::C);
+                    positions.push(p);
+                }
+            }
+            Ok(positions)
+        }
+        PositionalInfoType::D => {
+            for section in info.split(';') {
+                for subsection in split_with_bracket_context(section) {
+                    for underground in subsection.split(',') {
+                        let parts = parse_bracketed_info(underground)?;
+                        let p = Position::new(parts[0], parts[1], PositionalInfoType::D);
+                        positions.push(p);
+                    }
+                }
+            }
+            Ok(positions)
+        }
     }
 }
 
@@ -385,22 +420,27 @@ impl MmiOutput {
     /// to assemble/parse each field into its appropriate format and types.
     ///
     /// While this function is useful for building [`MmiOutput`] types,
-    /// [parse_mmi] will probably be **much** more practical since it
+    /// [`parse_record`] will probably be **much** more practical since it
     /// accepts a string reference and does the field tagging/mapping for you.
-    pub fn new(parts: HashMap<&str, &str>) -> Self {
+    pub fn assemble(parts: HashMap<&str, &str>) -> Result<Self> {
+        // does not use `parts.get(<key>)` because WE made the keys so WE
+        // know they exist
         let id = parts["id"].to_string();
         let mmi = parts["mmi"].to_string();
-        let score = parts["score"]
-            .parse::<f64>()
-            .expect("couldn't parse score value to float");
+        let score = parts["score"].parse::<f64>()?;
         let name = parts["name"].to_string();
         let cui = parts["cui"].to_string();
-        let semantic_types = parse_semantic_types(parts["semantic_types"]);
-        let triggers = parse_triggers(parts["triggers"]);
-        let location = Location::from_str(parts["location"]).unwrap();
-        let positional_info = parse_positional_info(parts["positional_info"]);
-        let tree_codes = parse_tree_codes(parts["tree_codes"]);
-        MmiOutput {
+        let source_sem_types = parts["semantic_types"].to_string();
+        let semantic_types = parse_semantic_types(&source_sem_types);
+        let source_triggers = parts["triggers"].to_string();
+        let triggers = parse_triggers(&source_triggers)?;
+        let source_location = parts["location"].to_string();
+        let location = Location::from_str(&source_location)?;
+        let source_positions = parts["positional_info"].to_string();
+        let positional_info = parse_positional_info(&source_positions)?;
+        let source_tree_codes = parts["tree_codes"].to_string();
+        let tree_codes = parse_tree_codes(&source_tree_codes);
+        let mmi_output = MmiOutput {
             id,
             mmi,
             score,
@@ -411,86 +451,10 @@ impl MmiOutput {
             location,
             positional_info,
             tree_codes,
-        }
+        };
+        Ok(mmi_output)
     }
 }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Output {
-    MMI(MmiOutput),
-    AA(AaOutput),
-}
-
-/// A better alternative to [`MmiOutput::new`] or [`AaOutput::new`]
-/// Takes a string reference, splits it on vertical bar (pipe) characters,
-/// labels each item with its corresponding field name,
-/// passes labeled data into [`MmiOutput::new`] or [`AaOutput::new`].
-///
-/// This is used to scan over lines in fielded MMI output text files in the main CLI.
-/// It detects whether the record is MMI or not by looking at the second item in the pipe-delimited
-/// vector and whether it matches MMI, AA/UA, or neither.
-///
-/// Arguments:
-/// * text: a string reference representing a single line of MMI/AA output
-///
-/// Returns:
-/// * Result<Output, Error>: An enumeration with MMI::MmiOutput and AA::AaOutput options. Could return
-/// error if a valid option is not found in the second vector position.
-///
-/// This effectively converts *each* fielded MMI **line** into an [`Output`] of either MMI or AA type..
-/// For example:
-///
-/// ```rust
-/// use std::fs::File;
-/// use std::io::{self, prelude::*, BufReader};
-/// use std::error::Error;
-///
-/// fn main() -> Result<(), Box<dyn Error>> {
-///     let file = File::open("data/MMI_sample.txt")?;
-///     // or for AA records
-///     // let file = File::open("data/AA_sample.txt"?);
-///     let reader = BufReader::new(file);
-///
-///     for line in reader.lines() {
-///         let record = line?;
-///         let result = mmi_parser::parse_mmi(record.as_str());
-///         println!("{:?}", result?); // must use debug
-///     }
-///
-///     Ok(())
-/// }
-/// ```
-pub fn parse_mmi(text: &str) -> Result<Output> {
-    let parts = split_text(text);
-    match parts[1] {
-        "MMI" => {
-            let fields = label_mmi_parts(parts);
-            let output = MmiOutput::new(fields);
-            Ok(Output::MMI(output))
-        }
-        "AA" | "UA" => {
-            let fields = label_aa_parts(parts);
-            let output = AaOutput::new(fields);
-            Ok(Output::AA(output))
-        }
-        _ => Err(ValueError),
-    }
-}
-
-/// An alternative Result implementation using [`ValueError`]
-pub type Result<T> = std::result::Result<T, ValueError>;
-
-/// ValueError occurs when an invalid value was provided
-#[derive(Debug)]
-pub struct ValueError;
-
-impl Display for ValueError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Received an unexpected value")
-    }
-}
-
-impl Error for ValueError {}
 
 /// Which type of abbreviation (AA) record exists, either AA or UA (user-defined)
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -504,7 +468,7 @@ pub enum AbbreviationType {
 impl FromStr for AbbreviationType {
     type Err = ValueError;
     /// Parses an Abbreviation Type from a string reference.
-    fn from_str(s: &str) -> std::result::Result<Self, ValueError> {
+    fn from_str(s: &str) -> std::result::Result<AbbreviationType, ValueError> {
         match s.to_uppercase().as_str() {
             "AA" => Ok(AbbreviationType::AA),
             "UA" => Ok(AbbreviationType::UA),
@@ -522,19 +486,15 @@ pub struct AaPosInfo {
 
 impl AaPosInfo {
     /// New function to create positional info type from two str references
-    pub fn new(s: &str, l: &str) -> Self {
-        let ss = s
-            .parse::<i32>()
-            .expect("could not parse start position to integer");
-        let ll = l.parse::<i32>().expect("could not parse length to integer");
+    pub fn new(s: i32, l: i32) -> Self {
         AaPosInfo {
-            start: ss,
-            length: ll,
+            start: s,
+            length: l,
         }
     }
 }
 
-/// Main "Secondary" type of program
+/// Main "Secondary" struct of program
 /// Acronyms and Abbreviations detected by MetaMap
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct AaOutput {
@@ -559,30 +519,29 @@ pub struct AaOutput {
 }
 
 impl AaOutput {
-    /// New function for AA types
+    /// Parses a hashmap into AaOutput field types.
+    /// Utilizes all other functionality defined in this module
+    /// to assemble/parse each field into its appropriate format and types.
     ///
-    /// Mostly handles parsing strings to integers, also tags the abbreviation type and positional information.
-    pub fn new(parts: HashMap<&str, &str>) -> Self {
+    /// While this function is useful for building [`AaOutput`] types,
+    /// [`parse_record`] will probably be **much** more practical since it
+    /// accepts a string reference and does the field tagging/mapping for you.
+    pub fn assemble(parts: HashMap<&str, &str>) -> Result<Self> {
+        // does not use `parts.get(<key>)` because WE made the keys so WE
+        // know they exist
         let id = parts["id"].to_string();
-        let abbreviation_type = AbbreviationType::from_str(parts["abbreviation_type"])
-            .expect("couldn't parse abbreviation type (AA or UA)");
+        let abbreviation_type = AbbreviationType::from_str(parts["abbreviation_type"])?;
         let short_form = parts["short_form"].to_string();
         let long_form = parts["long_form"].to_string();
-        let short_token_count = parts["short_token_count"]
-            .parse::<i32>()
-            .expect("couldn't parse string to integer.");
-        let short_character_count = parts["short_character_count"]
-            .parse::<i32>()
-            .expect("couldn't parse string to integer.");
-        let long_token_count = parts["long_token_count"]
-            .parse::<i32>()
-            .expect("couldn't parse string to integer.");
-        let long_character_count = parts["long_character_count"]
-            .parse::<i32>()
-            .expect("couldn't parse string to integer.");
-        let position_parts: Vec<&str> = parts["positional_info"].split(':').collect();
-        let positional_info = AaPosInfo::new(position_parts[0], position_parts[1]);
-        AaOutput {
+        let short_token_count = parts["short_token_count"].parse::<i32>()?;
+        let short_character_count = parts["short_character_count"].parse::<i32>()?;
+        let long_token_count = parts["long_token_count"].parse::<i32>()?;
+        let long_character_count = parts["long_character_count"].parse::<i32>()?;
+        let position_parts = parts["positional_info"].split(':').collect::<Vec<&str>>();
+        let pp1 = position_parts[0].parse::<i32>()?;
+        let pp2 = position_parts[1].parse::<i32>()?;
+        let positional_info = AaPosInfo::new(pp1, pp2);
+        let aa_output = AaOutput {
             id,
             abbreviation_type,
             short_form,
@@ -592,12 +551,16 @@ impl AaOutput {
             long_token_count,
             long_character_count,
             positional_info,
-        }
+        };
+        Ok(aa_output)
     }
 }
 
 /// Labels AA records with the corresponding field names
-pub fn label_aa_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
+pub fn label_aa_parts(parts: Vec<&str>) -> Result<HashMap<&str, &str>> {
+    if parts.len() != 9 {
+        return Err(Box::new(ValueError));
+    }
     let mut map: HashMap<&str, &str> = HashMap::new();
     map.insert("id", parts[0]);
     map.insert("abbreviation_type", parts[1]);
@@ -608,7 +571,69 @@ pub fn label_aa_parts(parts: Vec<&str>) -> HashMap<&str, &str> {
     map.insert("long_token_count", parts[6]);
     map.insert("long_character_count", parts[7]);
     map.insert("positional_info", parts[8]);
-    map
+    Ok(map)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Output {
+    MMI(MmiOutput),
+    AA(AaOutput),
+}
+
+/// A better alternative to [`MmiOutput::assemble`] or [`AaOutput::assemble`]
+/// Takes a string reference, splits it on vertical bar (pipe) characters,
+/// labels each item with its corresponding field name,
+/// passes labeled data into [`MmiOutput::assemble`] or [`AaOutput::assemble`].
+///
+/// This is used to scan over lines in fielded MMI output text files in the main CLI.
+/// It detects whether the record is MMI or not by looking at the second item in the pipe-delimited
+/// vector and whether it matches MMI, AA/UA, or neither.
+///
+/// Arguments:
+/// * text: a string reference representing a single line of MMI/AA output
+///
+/// Returns:
+/// * Result<Output, ValueError>: An enumeration with MMI::MmiOutput and AA::AaOutput options. Could return
+/// error if a valid option is not found in the second vector position.
+///
+/// This effectively converts *each* fielded MMI **line** into an [`Output`] of either MMI or AA type.
+/// For example:
+///
+/// ```rust
+/// use std::io::{BufReader, BufRead};
+/// use std::fs::File;
+///
+/// let file = File::open("data/MMI_sample.txt").unwrap();
+/// // or for AA records
+/// // let file = File::open("data/AA_sample.txt".unwrap());
+/// let reader = BufReader::new(file);
+///
+/// for line in reader.lines() {
+///     let record = line.unwrap();
+///     let result = mmi_parser::parse_record(record.as_str());
+///     println!("{:?}", result.unwrap()); // must use debug
+/// }
+
+/// ```
+pub fn parse_record(text: &str) -> Result<Output> {
+    let parts = split_text(text);
+    // only 2 valid length options, easy to stop early
+    if parts.len() != 10 && parts.len() != 9 {
+        return Err(Box::new(ValueError));
+    }
+    match parts[1].to_ascii_uppercase().as_str() {
+        "MMI" => {
+            let fields = label_mmi_parts(parts)?;
+            let output = MmiOutput::assemble(fields)?;
+            Ok(Output::MMI(output))
+        }
+        "AA" | "UA" => {
+            let fields = label_aa_parts(parts)?;
+            let output = AaOutput::assemble(fields)?;
+            Ok(Output::AA(output))
+        }
+        _ => Err(Box::new(ValueError)),
+    }
 }
 
 #[cfg(test)]
@@ -619,14 +644,9 @@ mod tests {
 
     #[test]
     fn test_parse_bool() {
-        assert!(parse_bool("1"));
-        assert!(!parse_bool("0"));
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_invalid_parse_bool() {
-        parse_bool("123");
+        assert!(parse_bool("1").unwrap());
+        assert!(!parse_bool("0").unwrap());
+        assert!(parse_bool("2").is_err());
     }
 
     #[test]
@@ -646,35 +666,38 @@ mod tests {
         let cat = categorize_positional_info(r1.0, r1.1, r1.2);
 
         assert_eq!(r1, (true, true, true));
-        assert_eq!(cat, PositionalInfoType::D);
+        assert_eq!(cat.unwrap(), PositionalInfoType::D);
 
         let s1 = "117/5;122/4";
         let r1 = tag_pos_info(s1);
         let cat = categorize_positional_info(r1.0, r1.1, r1.2);
 
         assert_eq!(r1, (false, false, false));
-        assert_eq!(cat, PositionalInfoType::A);
+        assert_eq!(cat.unwrap(), PositionalInfoType::A);
 
         let s1 = "117/5";
         let r1 = tag_pos_info(s1);
         let cat = categorize_positional_info(r1.0, r1.1, r1.2);
 
         assert_eq!(r1, (false, false, false));
-        assert_eq!(cat, PositionalInfoType::A);
+        assert_eq!(cat.unwrap(), PositionalInfoType::A);
 
         let s1 = "117/5,122/4,113/2";
         let r1 = tag_pos_info(s1);
         let cat = categorize_positional_info(r1.0, r1.1, r1.2);
 
         assert_eq!(r1, (false, false, true));
-        assert_eq!(cat, PositionalInfoType::B);
+        assert_eq!(cat.unwrap(), PositionalInfoType::B);
 
         let s1 = "[122/4],[117/6]";
         let r1 = tag_pos_info(s1);
         let cat = categorize_positional_info(r1.0, r1.1, r1.2);
 
         assert_eq!(r1, (true, false, true));
-        assert_eq!(cat, PositionalInfoType::C);
+        assert_eq!(cat.unwrap(), PositionalInfoType::C);
+
+        let r1 = categorize_positional_info(true, true, false);
+        assert!(r1.is_err());
     }
 
     #[test]
@@ -700,7 +723,8 @@ mod tests {
     #[test]
     fn test_name_parts() {
         let sample = "24119710|MMI|637.30|Isopoda|C0598806|[euka]|[\"Isopod\"-ab-1-\"isopod\"-adj-0,\"Isopoda\"-ti-1-\"Isopoda\"-noun-0]|TI;AB|228/6;136/7|B01.050.500.131.365.400";
-        assert_eq!(label_mmi_parts(split_text(sample)), {
+        let split = split_text(sample);
+        assert_eq!(label_mmi_parts(split).unwrap(), {
             let mut map = HashMap::new();
             map.insert("id", "24119710");
             map.insert("mmi", "MMI");
@@ -717,6 +741,8 @@ mod tests {
             map.insert("tree_codes", "B01.050.500.131.365.400");
             map
         });
+        let split = split_text(sample);
+        assert!(label_mmi_parts(split[0..5].to_vec()).is_err());
     }
 
     #[test]
@@ -769,7 +795,7 @@ mod tests {
     fn test_parse_positional_info() {
         let sample = "228/6;136/7";
         assert_eq!(
-            parse_positional_info(sample),
+            parse_positional_info(sample).unwrap(),
             vec![
                 Position::new(228, 6, PositionalInfoType::A),
                 Position::new(136, 7, PositionalInfoType::A)
@@ -777,7 +803,7 @@ mod tests {
         );
         let s1 = "[4061/10,4075/11],[4061/10,4075/11]";
         assert_eq!(
-            parse_positional_info(s1),
+            parse_positional_info(s1).unwrap(),
             vec![
                 Position::new(4061, 10, PositionalInfoType::D),
                 Position::new(4075, 11, PositionalInfoType::D),
@@ -787,7 +813,7 @@ mod tests {
         );
         let s1 = "7059/5,7073/5";
         assert_eq!(
-            parse_positional_info(s1),
+            parse_positional_info(s1).unwrap(),
             vec![
                 Position::new(7059, 5, PositionalInfoType::B),
                 Position::new(7073, 5, PositionalInfoType::B),
@@ -795,7 +821,7 @@ mod tests {
         );
         let s1 = "[1351/8],[1437/8]";
         assert_eq!(
-            parse_positional_info(s1),
+            parse_positional_info(s1).unwrap(),
             vec![
                 Position::new(1351, 8, PositionalInfoType::C),
                 Position::new(1437, 8, PositionalInfoType::C),
@@ -805,7 +831,7 @@ mod tests {
 
     #[test]
     fn test_new_trigger() {
-        let t = ("hi", "tI;aB", "124", "fun times", "testing stuff", "1");
+        let t = ("hi", "tI;aB", "124", "fun times", "testing stuff", true);
         let tt = Trigger::new(t.0, t.1, t.2, t.3, t.4, t.5);
         let actual_tt = Trigger {
             name: String::from("hi"),
@@ -823,7 +849,7 @@ mod tests {
         let sample = "[\"Crustacea\"-ti-1-\"Crustacea\"-noun-0]";
         let result = parse_triggers(sample);
         assert_eq!(
-            result,
+            result.unwrap(),
             [Trigger {
                 name: "Crustacea".to_string(),
                 loc: Location::TI,
@@ -833,6 +859,8 @@ mod tests {
                 negation: false
             }]
         );
+        let s2 = "[\"Crustacea\"-ti-1-\"Crustacea\"-noun";
+        assert!(parse_triggers(s2).is_err());
     }
 
     #[test]
@@ -891,7 +919,7 @@ mod tests {
             ],
             tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()]),
         };
-        assert_eq!(expected, MmiOutput::new(map));
+        assert_eq!(expected, MmiOutput::assemble(map).unwrap());
     }
 
     #[test]
@@ -937,7 +965,7 @@ mod tests {
             ],
             tree_codes: Some(vec!["B01.050.500.131.365.400".to_string()]),
         };
-        let parsed = match parse_mmi(s1).unwrap() {
+        let parsed = match parse_record(s1).unwrap() {
             Output::MMI(x) => x,
             _ => panic!("stuff"),
         };
@@ -947,7 +975,7 @@ mod tests {
     #[test]
     fn test_parse_mmi_for_aa() {
         let s1 = "23074487|AA|FY|fiscal years|1|2|3|12|9362:2";
-        let expected = match parse_mmi(s1).unwrap() {
+        let expected = match parse_record(s1).unwrap() {
             Output::AA(x) => x,
             _ => panic!("stuff"),
         };
@@ -958,7 +986,7 @@ mod tests {
     #[should_panic]
     fn test_panic_parse_mmi() {
         let s1 = "asda|fake|other stuff|";
-        parse_mmi(s1).unwrap();
+        parse_record(s1).unwrap();
     }
 
     #[test]
@@ -972,5 +1000,28 @@ mod tests {
             AbbreviationType::from_str("UA").unwrap()
         );
         assert!(AbbreviationType::from_str("asfnkjsanf").is_err())
+    }
+
+    #[test]
+    fn test_parse_bracketed_info() {
+        let t = parse_bracketed_info("[12/hi]");
+        assert!(t.is_err());
+    }
+
+    #[test]
+    fn test_check_parts() {
+        assert!(check_parts(&["hi", "bye"]).is_ok());
+        assert!(check_parts(&["hi", "bye", "see ya"]).is_err());
+    }
+
+    #[test]
+    fn test_label_aa_parts() {
+        let sample = vec!["hi", "by", "se", "yA", "later", "alligator"];
+        assert!(label_aa_parts(sample).is_err());
+    }
+
+    #[test]
+    fn test_parse_record_fail() {
+        assert!(parse_record("hi").is_err());
     }
 }
