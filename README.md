@@ -83,12 +83,10 @@ The `-N` flag here is important as it signals ot MetaMap to use the MMI output.
 This should result in an output similar to the following:
 
 ```bash
-   1   │ /home/nanthony/public_mm/bin/SKRrun.20 /home/nanthony/public_mm/bin/metamap20.BINARY.Linux --lexicon db -Z 2020AA
-       │  -N
-   2   │ USER|MMI|5.18|Carcinoma of lung|C0684249|[neop]|["LUNG CANCER"-tx-1-"lung cancer"-noun-0]|TX|0/11|
-   3   │ USER|MMI|5.18|Malignant neoplasm of lung|C0242379|[neop]|["Lung Cancer"-tx-1-"lung cancer"-noun-0]|TX|0/11|
-   4   │ USER|MMI|5.18|Primary malignant neoplasm of lung|C1306460|[neop]|["Lung cancer"-tx-1-"lung cancer"-noun-0]|TX|0/1
-       │ 1|
+/home/nanthony/public_mm/bin/SKRrun.20 /home/nanthony/public_mm/bin/metamap20.BINARY.Linux --lexicon db -Z 2020AA -N
+USER|MMI|5.18|Carcinoma of lung|C0684249|[neop]|["LUNG CANCER"-tx-1-"lung cancer"-noun-0]|TX|0/11|
+USER|MMI|5.18|Malignant neoplasm of lung|C0242379|[neop]|["Lung Cancer"-tx-1-"lung cancer"-noun-0]|TX|0/11|
+USER|MMI|5.18|Primary malignant neoplasm of lung|C1306460|[neop]|["Lung cancer"-tx-1-"lung cancer"-noun-0]|TX|0/1
 ```
 
 As you can see the output is prefaced with a log-line of my metamap installation. This line must be removed BEFORE running the mmi-parser.
@@ -115,15 +113,27 @@ The `-i` removes the headers in place, and the `'1d` simply means delete the fir
 
 Once you have some MetaMap output, you can parse it into jsonlines simply by specifying the folder in which your output lives. The `mmi-parser` will go through each line in each `.txt` file in the specified directory and parse it into jsonlines.
 
-For example, in this repo there is a provided [`data/sample.txt`](data/sample.txt) which contains the sample MMI output from the explanatory document linked at the top of this file.
+For example, in this repo there is a provided [`data/AA_sample.txt`](data/AA_sample.txt) which contains the sample MMI output from the explanatory document linked at the top of this file.
 
 You can run `mmi-parser` on this file by simply running:
 
 ```bash
-cargo run --example parse
+cargo run --example parse_aa
 ```
 
-This runs [`examples/parse.rs`](examples/parse.rs) which passes `data` as the target directory to the `mmi-parser` tool. It is effectively the same as running `mmi-parser data` in your terminal. You can then see the jsonlines output in your [`data/sample_parsed.jsonl`](data/sample_parsed.jsonl) which is also provided in this repo.
+This runs [`examples/parse.rs`](examples/parse_aa.rs) which passes `data` as the target directory to the `mmi-parser` tool.
+
+You can do the same for MmiOutput type lines by using the mmi example:
+
+```bash
+cargo run --example parse_mmi
+```
+
+which loads [`data/MMI_sample.txt](data/MMI_sample.txt) and outputs [`data/MMI_sample_parsed.jsonl](data/MMI_sample_parsed.jsonl).
+
+You can then see the jsonlines output in your [`data/sample_parsed.jsonl`](data/AA_sample_parsed.jsonl) which is also provided in this repo.
+
+When running the full program (i.e. `mmi-parser <FOLDER>`), the different result types will be auto-detected for you.
 
 ### mmi-parser (API)
 
