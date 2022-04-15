@@ -17,7 +17,7 @@ The primary reference for the Fielded MMI output can be found [here](https://lhn
     - [mmi-parser (API)](#mmi-parser-api)
   - [Support](#support)
   - [Contributing](#contributing)
-  - [License - MIT](#license---mit)
+  - [MIT License](#mit-license)
 
 ## Description
 
@@ -135,4 +135,6 @@ Please make sure to update tests as appropriate.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more details. 😃
 
-## [License - MIT](LICENSE)
+## MIT License
+
+[LICENSE](LICENSE)
