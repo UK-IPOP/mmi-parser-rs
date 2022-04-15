@@ -16,6 +16,7 @@ The primary reference for the Fielded MMI output can be found [here](https://lhn
     - [mmi-parser (CLI)](#mmi-parser-cli)
       - [Output Types](#output-types)
     - [mmi-parser (API)](#mmi-parser-api)
+  - [Example Workflow](#example-workflow)
   - [Support](#support)
   - [Contributing](#contributing)
   - [MIT License](#mit-license)
@@ -161,6 +162,10 @@ the possibilities and also makes for quick eye-examinations.
 If you wish to use the mmi-parser crate in your application the easiest and most convenient method is to create an `MmiOutput` or `AaOutput` type by passing a string reference (most likely a single line of fielded MMI data from a file). The `parse_record()` function will decide which of these types the record belongs to and assemble the type for you. 😃
 
 Full API documentation can be found on [docs.rs](https://docs.rs/mmi-parser/latest/mmi_parser/).
+
+## Example Workflow
+
+For analytical purposes, I would suggest combining all of these jsonlines files into one larger file and then you can process it with a tool like [jq](https://stedolan.github.io/jq/) or Python - [Pandas](https://pandas.pydata.org) depending on your use case. 🙂
 
 ## Support
 
