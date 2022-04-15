@@ -127,13 +127,13 @@ This runs [`examples/parse.rs`](examples/parse.rs) which passes `data` as the ta
 
 ### mmi-parser (API)
 
-If you wish to use the mmi-parser crate in your application the easiest and most convenient method is to create an `MmiOutput` type by passing a string reference (most likely a single line of fielded MMI data from a file) to `parse_mmi()`.
+If you wish to use the mmi-parser crate in your application the easiest and most convenient method is to create an `MmiOutput` or `AaOutput` type by passing a string reference (most likely a single line of fielded MMI data from a file). The `parse_record()` function will decide which of these types the record belongs to and assemble the type for you. 😃
 
 Full API documentation can be found on [docs.rs](https://docs.rs/mmi-parser/latest/mmi_parser/).
 
 ## Support
 
-If you encounter any issues or need support please either contact @nanthony007 or [open an issue](https://github.com/UK-IPOP/mmi-parser-rs/issues/new).
+If you encounter any issues or need support please either contact [@nanthony007](<[github.com/](https://github.com/nanthony007)>) or [open an issue](https://github.com/UK-IPOP/mmi-parser-rs/issues/new).
 
 ## Contributing
 
