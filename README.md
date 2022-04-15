@@ -14,10 +14,11 @@ The primary reference for the Fielded MMI output can be found [here](https://lhn
   - [Usage](#usage)
     - [Brief MetaMap Intro](#brief-metamap-intro)
     - [mmi-parser (CLI)](#mmi-parser-cli)
+      - [Output Types](#output-types)
     - [mmi-parser (API)](#mmi-parser-api)
   - [Support](#support)
   - [Contributing](#contributing)
-  - [License - MIT](#license---mit)
+  - [MIT License](#mit-license)
 
 ## Description
 
@@ -83,12 +84,10 @@ The `-N` flag here is important as it signals ot MetaMap to use the MMI output.
 This should result in an output similar to the following:
 
 ```bash
-   1   │ /home/nanthony/public_mm/bin/SKRrun.20 /home/nanthony/public_mm/bin/metamap20.BINARY.Linux --lexicon db -Z 2020AA
-       │  -N
-   2   │ USER|MMI|5.18|Carcinoma of lung|C0684249|[neop]|["LUNG CANCER"-tx-1-"lung cancer"-noun-0]|TX|0/11|
-   3   │ USER|MMI|5.18|Malignant neoplasm of lung|C0242379|[neop]|["Lung Cancer"-tx-1-"lung cancer"-noun-0]|TX|0/11|
-   4   │ USER|MMI|5.18|Primary malignant neoplasm of lung|C1306460|[neop]|["Lung cancer"-tx-1-"lung cancer"-noun-0]|TX|0/1
-       │ 1|
+/home/nanthony/public_mm/bin/SKRrun.20 /home/nanthony/public_mm/bin/metamap20.BINARY.Linux --lexicon db -Z 2020AA -N
+USER|MMI|5.18|Carcinoma of lung|C0684249|[neop]|["LUNG CANCER"-tx-1-"lung cancer"-noun-0]|TX|0/11|
+USER|MMI|5.18|Malignant neoplasm of lung|C0242379|[neop]|["Lung Cancer"-tx-1-"lung cancer"-noun-0]|TX|0/11|
+USER|MMI|5.18|Primary malignant neoplasm of lung|C1306460|[neop]|["Lung cancer"-tx-1-"lung cancer"-noun-0]|TX|0/1
 ```
 
 As you can see the output is prefaced with a log-line of my metamap installation. This line must be removed BEFORE running the mmi-parser.
@@ -103,29 +102,59 @@ USER|MMI|5.18|Primary malignant neoplasm of lung|C1306460|[neop]|["Lung cancer"-
 
 You could try to hack your way around piping the output of MetaMap to this tool but it is beyond the scope for our use case.
 
+I would recommend `sed` to remove these headers. While it is not the _most_ performant option, its use is straightforward. Simply:
+
+```bash
+sed -i '1d' <target folder>/*.txt
+```
+
+The `-i` removes the headers in place, and the `'1d` simply means delete the first line.
+
 ### mmi-parser (CLI)
 
 Once you have some MetaMap output, you can parse it into jsonlines simply by specifying the folder in which your output lives. The `mmi-parser` will go through each line in each `.txt` file in the specified directory and parse it into jsonlines.
 
-For example, in this repo there is a provided [`data/sample.txt`](data/sample.txt) which contains the sample MMI output from the explanatory document linked at the top of this file.
+For example, in this repo there is a provided [`data/AA_sample.txt`](data/AA_sample.txt) which contains the sample MMI output from the explanatory document linked at the top of this file.
 
 You can run `mmi-parser` on this file by simply running:
 
 ```bash
-cargo run --example parse
+cargo run --example parse_aa
 ```
 
-This runs [`examples/parse.rs`](examples/parse.rs) which passes `data` as the target directory to the `mmi-parser` tool. It is effectively the same as running `mmi-parser data` in your terminal. You can then see the jsonlines output in your [`data/sample_parsed.jsonl`](data/sample_parsed.jsonl) which is also provided in this repo.
+This runs [`examples/parse.rs`](examples/parse_aa.rs) which passes `data` as the target directory to the `mmi-parser` tool.
+
+You can do the same for MmiOutput type lines by using the mmi example:
+
+```bash
+cargo run --example parse_mmi
+```
+
+which loads [`data/MMI_sample.txt`](data/MMI_sample.txt) and outputs [`data/MMI_sample_parsed.jsonl`](data/MMI_sample_parsed.jsonl).
+
+You can then see the jsonlines output in your [`data/sample_parsed.jsonl`](data/AA_sample_parsed.jsonl) which is also provided in this repo.
+
+When running the full program (i.e. `mmi-parser <FOLDER>`), the different result types will be auto-detected for you.
+
+#### Output Types
+
+It is important to note that there are two distinct output types even though three were described in the [source](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf) file.
+
+The obvious main MMI type and then we combined the remaining AA/UA types into one (AA).
+
+In the jsonlines output you will see the first key presents the type associated with
+that MetaMap output line. This helps with building models/types to represent each of
+the possibilities and also makes for quick eye-examinations.
 
 ### mmi-parser (API)
 
-If you wish to use the mmi-parser crate in your application the easiest and most convenient method is to create an `MmiOutput` type by passing a string reference (most likely a single line of fielded MMI data from a file) to `parse_mmi()`.
+If you wish to use the mmi-parser crate in your application the easiest and most convenient method is to create an `MmiOutput` or `AaOutput` type by passing a string reference (most likely a single line of fielded MMI data from a file). The `parse_record()` function will decide which of these types the record belongs to and assemble the type for you. 😃
 
 Full API documentation can be found on [docs.rs](https://docs.rs/mmi-parser/latest/mmi_parser/).
 
 ## Support
 
-If you encounter any issues or need support please either contact @nanthony007 or [open an issue](https://github.com/UK-IPOP/mmi-parser-rs/issues/new).
+If you encounter any issues or need support please either contact [@nanthony007](<[github.com/](https://github.com/nanthony007)>) or [open an issue](https://github.com/UK-IPOP/mmi-parser-rs/issues/new).
 
 ## Contributing
 
@@ -135,4 +164,6 @@ Please make sure to update tests as appropriate.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more details. 😃
 
-## [License - MIT](LICENSE)
+## MIT License
+
+[LICENSE](LICENSE)
