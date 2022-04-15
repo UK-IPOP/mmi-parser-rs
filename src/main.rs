@@ -91,11 +91,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match fs::read_dir(cli.folder) {
         Ok(files) => {
-            for file in files {
+            'files: for file in files {
                 let file = file?;
                 let path = file.path();
                 let filename = path.to_str().expect("could not parse file path");
                 if filename.ends_with(".txt") {
+                    bar.inc(1);
                     let out_file_name = filename.replace(".txt", "_parsed.jsonl").to_string();
                     let out_file = fs::File::create(&out_file_name);
                     if out_file.is_err() {
@@ -109,10 +110,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     if file.is_err() {
                         println!("Could not open {}.", &filename);
                         println!("Skipping file...");
-                        continue;
+                        continue 'files;
                     }
                     let reader = BufReader::new(file?);
-                    for (i, line) in reader.lines().flatten().enumerate() {
+                    'lines: for (i, line) in reader.lines().flatten().enumerate() {
                         let result = mmi_parser::parse_record(&line);
                         match result {
                             Ok(val) => {
@@ -132,23 +133,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 );
                                 println!("Line contents: {}", &line);
                                 println!("Skipping line...");
-                                continue;
+                                continue 'lines;
                             }
                         }
                     }
                 }
-                bar.inc(1)
             }
+            bar.finish();
+            println!("Finishing up...");
+            println!("{}", "Done.".bright_green().bold());
+            Ok(())
         }
         Err(e) => {
             println!(
                 "{err} Couldn't scan target directory",
                 err = "ERROR".red().bold()
             );
-            return Err(Box::new(e));
+            Err(Box::new(e))
         }
     }
-    bar.finish_and_clear();
-    println!("{}", "Done.".bright_green().bold());
-    Ok(())
 }
