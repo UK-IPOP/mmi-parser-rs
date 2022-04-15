@@ -136,6 +136,16 @@ You can then see the jsonlines output in your [`data/sample_parsed.jsonl`](data/
 
 When running the full program (i.e. `mmi-parser <FOLDER>`), the different result types will be auto-detected for you.
 
+The tool will also show you any errors it detects and provide the file name and the line of the error in addition to the line itself. While this information
+is very helpful, it can sometimes be obscured by the progress bar depending on your terminal settings. Therefore it is recommended to run the program using a log-file
+to capture the logs while keeping the progress bar visible for sanity. For example:
+
+```bash
+mmi-parser data > errors.log
+```
+
+would redirect all of the messages/output to the log file where you can scan/read it for more information on the results.
+
 #### Output Types
 
 It is important to note that there are two distinct output types even though three were described in the [source](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf) file.
