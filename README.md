@@ -14,6 +14,7 @@ The primary reference for the Fielded MMI output can be found [here](https://lhn
   - [Usage](#usage)
     - [Brief MetaMap Intro](#brief-metamap-intro)
     - [mmi-parser (CLI)](#mmi-parser-cli)
+      - [Output Types](#output-types)
     - [mmi-parser (API)](#mmi-parser-api)
   - [Support](#support)
   - [Contributing](#contributing)
@@ -129,11 +130,21 @@ You can do the same for MmiOutput type lines by using the mmi example:
 cargo run --example parse_mmi
 ```
 
-which loads [`data/MMI_sample.txt](data/MMI_sample.txt) and outputs [`data/MMI_sample_parsed.jsonl](data/MMI_sample_parsed.jsonl).
+which loads [`data/MMI_sample.txt`](data/MMI_sample.txt) and outputs [`data/MMI_sample_parsed.jsonl`](data/MMI_sample_parsed.jsonl).
 
 You can then see the jsonlines output in your [`data/sample_parsed.jsonl`](data/AA_sample_parsed.jsonl) which is also provided in this repo.
 
 When running the full program (i.e. `mmi-parser <FOLDER>`), the different result types will be auto-detected for you.
+
+#### Output Types
+
+It is important to note that there are two distinct output types even though three were described in the [source](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf) file.
+
+The obvious main MMI type and then we combined the remaining AA/UA types into one (AA).
+
+In the jsonlines output you will see the first key presents the type associated with
+that MetaMap output line. This helps with building models/types to represent each of
+the possibilities and also makes for quick eye-examinations.
 
 ### mmi-parser (API)
 
