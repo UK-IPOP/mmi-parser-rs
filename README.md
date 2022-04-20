@@ -1,5 +1,7 @@
 # `mmi-parser`
 
+![MMI parser](https://user-images.githubusercontent.com/45318637/164131798-377e17fa-94b7-4528-a116-a1da9d08b082.png)
+
 `mmi-parser` is a rust command line tool (crate) for parsing out Fielded MetaMap Indexing (MMI) output from the National Library of Medicine's (NLM) [MetaMap tool](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap.html) into jsonlines data.
 
 The primary reference for the Fielded MMI output can be found [here](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/Docs/MMI_Output_2016.pdf).
